@@ -1,0 +1,285 @@
+---
+title: "Wastewater, Total_Flow"
+author: "`Marlin derived from work by Brian Yandell"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	fig.height = 4,
+	fig.width = 15,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```
+The code was derrived from work by the DSI.
+The Original R code file can be found in the [pandemic github repository](https://github.com/UW-Madison-DataScience/pandemic/blob/master/wastewater.Rmd).
+```
+
+
+
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(broom)
+library(zoo)
+library(RcppRoll)
+library(ggformula)
+library(ggpubr)
+kprint <- function(...) {
+  if(interactive()) {
+    print(...)
+  } else {
+    knitr::kable(...)
+  }
+}
+```
+
+```{r 2}
+filename <- "../data/wastewater/WW SARS-COV-2 Data V3.xlsx"
+#filename <- "data/wastewater/UW and MMSD Report for SARS-Cov-2 Influent Samples 12.08.20vFinal.xlsx"
+```
+
+```{r warning = FALSE, message = FALSE}
+tmpfn <- function(N1, N2) {
+  AVG <- sqrt(N1 * N2)
+  AVG <- ifelse(is.na(N1), N2, AVG)
+  AVG <- ifelse(is.na(N2), N1, AVG)
+}
+missing_codes <- c("","NA","0","Undetected","Not Detected",
+                   "Field Parameters to be filled in", 
+                   "Inhibited-to be re-ran", "#DIV/0!")
+sheets <- excel_sheets(filename)
+water_MMSD <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 9), "text"),
+                    sheet = 1) %>%
+  rename(Comment = "...12")
+water_Interceptors <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 8), "text"),
+                    sheet = 2) %>%
+  rename(Comment = "...11") %>%
+  mutate(TSS = NA,
+         Site = ifelse(Site == "MMSD P02", "MMSD P2", Site),
+         Site = ifelse(Site == "MMSD P07", "MMSD P7", Site),
+         Site = ifelse(Site == "MMSD P08", "MMSD P8", Site)) %>%
+  select(1:5, TSS, everything())
+water_UW_Dorms <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 9), rep("text", 1)),
+                    sheet = 3) %>%
+  rename(Comment = "...12")
+water <- 
+  bind_rows(water_MMSD,
+            water_Interceptors,
+            water_UW_Dorms) %>%
+  rename(Date = "Collection Date",
+         pH = "pH (SU)",
+         Total_Flow = "Total Flow (MGD)",
+         Conductivity = "Conductivity (uS/CM@25C)",
+         N1 = "N1 (GC/L)",
+         N2 = "N2 (GC/L)",
+         PMMoV = "PMMoV (GC/L)",
+         Pct_BCoV = "% Recovery (BCoV)") %>%
+  filter(!is.na(Site)) %>%
+  mutate(AVG = tmpfn(N1, N2),
+         wt = 2 - is.na(N1) - is.na(N2),
+         Site = ifelse(Site == "UW-D", "UW-LakeShore", Site),
+         Site = ifelse(Site == "UW-S", "UW-Sellery", Site))
+```
+
+```{r}
+waters <- water %>%
+  pivot_longer(Conductivity:Pct_BCoV, names_to = "assay", values_to = "values") %>%
+  filter(!is.na(values)) %>%
+  mutate(wt = ifelse(assay == "AVG", wt, 1))
+```
+
+```{r}
+predfn <- function(x) {
+  x$pred <- 10^predict(lm(log10(values) ~ Date + Site, x, weight = wt))
+  x
+}
+addpred <- function(x) {
+  bind_rows(
+    map(
+      split(x, x$assay),
+      predfn),
+    .id = "assay")
+}
+```
+
+```{r}
+fitfn <- function(x, add = FALSE, ...) {
+  if(add) {
+    form <- formula(log10(values) ~ Date + Site)
+    elems <- 2:3
+    test <- "drop1"
+  } else {
+    form <- formula(log10(values) ~ Date * Site)
+    elems <- 3
+    test <- "anova"
+  }
+  fit <- lm(form, x, weight = wt)
+  switch(test,
+         anova = broom::tidy(anova(fit)[elems,]),
+         drop1 = broom::tidy(drop1(fit, fit, test = "F")[elems,])) %>%
+    select(term, statistic, p.value) %>%
+    mutate(statistic = round(statistic, 2),
+           p.value = signif(p.value, 3))
+}
+sumfn <- function(x, ...) {
+  bind_rows(
+    map(
+      split(x, x$assay),
+      fitfn, ...),
+    .id = "assay") %>%
+    arrange(term, assay)
+}
+timefit <- function(x) {
+  bind_rows(
+    sumfn(x, TRUE),
+    sumfn(x)) %>%
+  select(-statistic) %>%
+  pivot_wider(names_from = "term", values_from = "p.value") %>%
+  kprint()
+}
+```
+
+
+
+Things we are interested in: N1,N2,AVG,Pct_BCoV,PMMoV,Total_Flow
+
+```{r}
+CovidFileName = "covid.csv"
+covidData = read.csv(CovidFileName)%>%
+  mutate(ServiceID = ifelse(ServiceID=="MMSD","Madison",paste("MMSD P",ServiceID,sep="")),Date = as.Date(Date , format = "%m/%d/%y"))%>%
+  rename(Site=ServiceID)
+water2=water%>%
+  mutate(Date=as.Date(Date))%>%
+  mutate(rollz=rollmean(N1/(Pct_BCoV*PMMoV),k = 7, fill = NA))%>%
+  mutate(inti=cumsum(replace_na(rollz,0)))%>%
+  filter(Date!=as.Date("2020-11-09"))
+MergedData=left_join(covidData,water2,by = c("Date","Site"))%>%
+  filter(Site!="UW-LakeShore",Site!="UW-Sellery")
+
+StartTesting="2020-4-11"
+EndTesting="2021-1-4"
+StartFeces="2020-9-24"
+EndFeces="2020-11-30"
+AdjustedData=MergedData%>%
+  group_by(Site)%>%
+  mutate(roll=rollmean(Cases/Tests,k = 7, fill = NA))%>%
+  mutate(der=c(diff(roll),NA))
+minSew=min(AdjustedData$rollz,na.rm=TRUE)
+maxSew=max(AdjustedData$rollz,na.rm=T)
+minTest=min(AdjustedData$der,na.rm=T)
+maxTest=max(AdjustedData$der,na.rm=T)
+sites=unique(AdjustedData$Site)
+for (i in 1:length(sites)){
+  tot =AdjustedData%>%
+    filter(Site==sites[i])%>%
+    ggplot()+aes(x=Date)+
+    geom_point(aes(y=roll))+
+    geom_vline(xintercept = as.Date(StartFeces))+
+    geom_vline(xintercept = as.Date(EndFeces))+
+    scale_x_date(limits = as.Date(c(StartTesting,EndTesting)))
+    ggtitle(sites[i])
+  dir =AdjustedData%>%
+    filter(Site==sites[i])%>%
+    ggplot()+aes(x=Date)+
+    geom_point(aes(y=der))+
+    geom_vline(xintercept = as.Date(StartFeces))+
+    geom_vline(xintercept = as.Date(EndFeces))+
+    scale_x_date(limits = as.Date(c(StartTesting,EndTesting)))+
+    ylim(minTest,maxTest)+
+    ggtitle(sites[i])
+  zoom = AdjustedData%>%
+    filter(Site==sites[i])%>%
+    filter(!is.na(Cases/Tests))%>%
+    ggplot()+aes(x=Date,y=der)+
+    geom_point()+
+    geom_smooth(se=FALSE)+
+    #geom_point(aes(y=dir))+
+    geom_vline(xintercept = as.Date(StartFeces))+
+    geom_vline(xintercept = as.Date(EndFeces))+
+    scale_x_date(limits = as.Date(c(StartFeces,EndFeces)))+
+    ylim(minTest,maxTest)
+  mod=AdjustedData%>%
+    filter(Site==sites[i])%>%
+    ggplot()+aes(x=Date,y=rollz)+
+    geom_smooth(se=FALSE)+
+    geom_point()+
+    geom_vline(xintercept = as.Date(StartFeces))+
+    geom_vline(xintercept = as.Date(EndFeces))+
+    scale_x_date(limits = as.Date(c(StartFeces,EndFeces)))+
+    ylim(minSew,maxSew)
+    print(ggarrange(tot,dir, zoom, mod,nrow = 1,labels=c("%positive","change from previous day","zoomed in","N1/(Pct_BCoV*PMMoV)"),vjust=3,hjust=0))
+}
+```
+
+
+
+
+
+
+<!-- Things we are interested in: N1,N2,AVG,Pct_BCoV,PMMoV,Total Total_Flow -->
+
+<!-- ```{r} -->
+<!-- i=3 -->
+<!--   print(AdjustedData%>% -->
+<!--     filter(Site==sites[i])%>% -->
+<!--     filter(!is.na(Cases/Tests))%>% -->
+<!--     ggplot()+aes(x=Date)+ -->
+<!--     geom_point(aes(y=roll))+ -->
+<!--     #geom_point(aes(y=dir))+ -->
+<!--     geom_vline(xintercept = as.Date(StartFeces))+ -->
+<!--     geom_vline(xintercept = as.Date(EndFeces))+ -->
+<!--     scale_x_date(limits = c(as.Date(StartFeces),as.Date(EndFeces)+45))+ -->
+<!--     ggtitle(sites[i])) -->
+<!--   print(AdjustedData%>% -->
+<!--     filter(Site==sites[i])%>% -->
+<!--     ggplot()+aes(x=Date,y=AVG)+ -->
+<!--     geom_smooth(se=FALSE)+ -->
+<!--     geom_point()+ -->
+<!--     geom_vline(xintercept = as.Date(StartFeces))+ -->
+<!--     geom_vline(xintercept = as.Date(EndFeces))+ -->
+<!--     scale_x_date(limits = as.Date(c(StartFeces,EndFeces)))+ -->
+<!--     ggtitle(sites[i])) -->
+<!--   print(AdjustedData%>% -->
+<!--     filter(Site==sites[i])%>% -->
+<!--     ggplot()+aes(x=Date,y=Total_Flow*Pct_BCoV/(PMMoV))+ -->
+<!--     geom_smooth(se=FALSE)+ -->
+<!--     geom_point()+ -->
+<!--     geom_vline(xintercept = as.Date(StartFeces))+ -->
+<!--     geom_vline(xintercept = as.Date(EndFeces))+ -->
+<!--     scale_x_date(limits = as.Date(c(StartFeces,EndFeces)))+ -->
+<!--     ggtitle(sites[i])) -->
+<!--   print(AdjustedData%>% -->
+<!--     filter(Site==sites[i])%>% -->
+<!--     ggplot()+aes(x=Date,y=AVG*Total_Flow*Pct_BCoV/(PMMoV))+ -->
+<!--     geom_smooth(se=FALSE)+ -->
+<!--     geom_point()+ -->
+<!--     geom_vline(xintercept = as.Date(StartFeces))+ -->
+<!--     geom_vline(xintercept = as.Date(EndFeces))+ -->
+<!--     scale_x_date(limits = as.Date(c(StartFeces,EndFeces)))+ -->
+<!--     ggtitle(sites[i])) -->
+
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- AdjustedData%>% -->
+<!--   group_by(Site)%>% -->
+<!--   filter(between(Date, as.Date(StartFeces),as.Date(EndFeces)))%>% -->
+<!--   summarize(mean=mean(roll,na.rm=T)) -->
+<!-- ``` -->
+
+
+
