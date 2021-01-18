@@ -155,131 +155,164 @@ timefit <- function(x) {
 
 
 
-Things we are interested in: N1,N2,AVG,Pct_BCoV,PMMoV,Total_Flow
+
 
 ```{r}
+ShiftedAmount=5
+
 CovidFileName = "covid.csv"
 covidData = read.csv(CovidFileName)%>%
   mutate(ServiceID = ifelse(ServiceID=="MMSD","Madison",paste("MMSD P",ServiceID,sep="")),Date = as.Date(Date , format = "%m/%d/%y"))%>%
   rename(Site=ServiceID)
 water2=water%>%
   mutate(Date=as.Date(Date))%>%
-  mutate(rollz=rollmean(N1/(Pct_BCoV*PMMoV),k = 7, fill = NA))%>%
-  mutate(inti=cumsum(replace_na(rollz,0)))%>%
-  filter(Date!=as.Date("2020-11-09"))
+  mutate(Date=Date+ShiftedAmount)%>%
+  mutate(Model=log(N1/(Pct_BCoV*PMMoV)))
+         
 MergedData=left_join(covidData,water2,by = c("Date","Site"))%>%
   filter(Site!="UW-LakeShore",Site!="UW-Sellery")
 
-StartTesting="2020-4-11"
-EndTesting="2021-1-4"
-StartFeces="2020-9-24"
-EndFeces="2020-11-30"
+
+StartTesting=as.Date("2020-4-11")
+EndTesting=as.Date("2021-1-4")
+StartFeces=as.Date("2020-9-20")+ShiftedAmount
+EndFeces=as.Date("2020-11-25")+ShiftedAmount
+
+
+
 AdjustedData=MergedData%>%
   group_by(Site)%>%
   mutate(roll=rollmean(Cases/Tests,k = 7, fill = NA))%>%
   mutate(der=c(diff(roll),NA))
-minSew=min(AdjustedData$rollz,na.rm=TRUE)
-maxSew=max(AdjustedData$rollz,na.rm=T)
+
+
+minSew=min(AdjustedData$Model,na.rm=TRUE)
+maxSew=max(AdjustedData$Model,na.rm=T)
 minTest=min(AdjustedData$der,na.rm=T)
 maxTest=max(AdjustedData$der,na.rm=T)
 sites=unique(AdjustedData$Site)
+
+
 for (i in 1:length(sites)){
   tot =AdjustedData%>%
     filter(Site==sites[i])%>%
     ggplot()+aes(x=Date)+
     geom_point(aes(y=roll))+
-    geom_vline(xintercept = as.Date(StartFeces))+
-    geom_vline(xintercept = as.Date(EndFeces))+
-    scale_x_date(limits = as.Date(c(StartTesting,EndTesting)))
+    geom_vline(xintercept = StartFeces)+
+    geom_vline(xintercept = EndFeces)+
+    ylab("# of Positive/# of tests")+
+    scale_x_date(limits = c(StartTesting,EndTesting))
     ggtitle(sites[i])
   dir =AdjustedData%>%
     filter(Site==sites[i])%>%
     ggplot()+aes(x=Date)+
     geom_point(aes(y=der))+
-    geom_vline(xintercept = as.Date(StartFeces))+
-    geom_vline(xintercept = as.Date(EndFeces))+
-    scale_x_date(limits = as.Date(c(StartTesting,EndTesting)))+
-    ylim(minTest,maxTest)+
-    ggtitle(sites[i])
+    geom_vline(xintercept = StartFeces)+
+    geom_vline(xintercept = EndFeces)+
+    scale_x_date(limits = c(StartTesting,EndTesting))+
+    ylim(minTest,maxTest)
+    ylab("diffrence of positive rate from last week")
   zoom = AdjustedData%>%
     filter(Site==sites[i])%>%
     filter(!is.na(Cases/Tests))%>%
     ggplot()+aes(x=Date,y=der)+
     geom_point()+
     geom_smooth(se=FALSE)+
-    #geom_point(aes(y=dir))+
-    geom_vline(xintercept = as.Date(StartFeces))+
-    geom_vline(xintercept = as.Date(EndFeces))+
-    scale_x_date(limits = as.Date(c(StartFeces,EndFeces)))+
+    geom_vline(xintercept = StartFeces)+
+    geom_vline(xintercept = EndFeces)+
+    ylab("diffrence of positive rate from last week")+
+    scale_x_date(limits = c(StartFeces,EndFeces))+
     ylim(minTest,maxTest)
   mod=AdjustedData%>%
     filter(Site==sites[i])%>%
-    ggplot()+aes(x=Date,y=rollz)+
+    ggplot()+aes(x=Date,y=Model)+
     geom_smooth(se=FALSE)+
     geom_point()+
-    geom_vline(xintercept = as.Date(StartFeces))+
-    geom_vline(xintercept = as.Date(EndFeces))+
-    scale_x_date(limits = as.Date(c(StartFeces,EndFeces)))+
+    geom_vline(xintercept = StartFeces)+
+    geom_vline(xintercept = EndFeces)+
+    ylab("log of N1 gene normalized Pct_BCoV, PMMoV")+
+    scale_x_date(limits = c(StartFeces,EndFeces))+
     ylim(minSew,maxSew)
-    print(ggarrange(tot,dir, zoom, mod,nrow = 1,labels=c("%positive","change from previous day","zoomed in","N1/(Pct_BCoV*PMMoV)"),vjust=3,hjust=0))
+    fig=ggarrange(tot,dir, zoom, mod,nrow = 1)
+    print(annotate_figure(fig,top = text_grob(sites[i], color = "red", face = "bold", size = 14)))
 }
 ```
 
+```{r}
+modelData=MergedData%>%
+  group_by(Site)%>%
+  filter(!is.na(Model))%>%
+  mutate(roll=rollmean(Cases/Tests,k = 7, fill = NA))%>%
+  mutate(der=c(diff(roll),NA))
+
+
+linearMod <- lm(der ~ Model, data=modelData)
+linearMod
+
+TempData=AdjustedData%>%
+  group_by(Site)%>%
+  filter(Date==StartFeces)%>%
+  select(Site,startCases=Cases,startTest=Tests)%>%
+  merge(modelData,by="Site")
+
+FitedData=TempData%>%
+  mutate(fitted =  linearMod[[1]][2]*Model+linearMod[[1]][1],resid = fitted-der,Aresid=abs(resid))%>%
+  group_by(Site)%>%
+  mutate(orig=cumsum(ifelse(is.na(der), 0, der)) + der*0,origPre=cumsum(ifelse(is.na(fitted), 0, fitted)) + fitted*0)%>%
+  mutate(orig=orig+(startCases/startTest),origPre=origPre+(startCases/startTest))%>%
+  mutate(residFin=origPre-roll)
+
+FitedData%>%
+    ggplot()+aes(x=Date)+
+    geom_point(aes(y=der,color="change from last week of % positive"))+
+    geom_point(aes(y=fitted,color="Model"))+
+    ylab("%positive")+
+    facet_grid(~Site)+
+    scale_x_date(limits = c(StartFeces,EndFeces))
+
+
+FitedData%>%
+    ggplot()+aes(x=der)+
+    geom_point(aes(y=fitted,color="Model"))+
+    geom_abline(aes(slope =1,intercept=0))+
+    ylab("model predictions")+
+    xlab("change from last week of % positive")+
+    facet_grid(~Site)
 
 
 
+FitedData%>%
+    ggplot()+aes(x=Date)+
+    geom_point(aes(y=Cases/Tests,color="%Positive"))+
+    geom_point(aes(y=orig,color="Reconstructed % Positive"))+
+    geom_point(aes(y=origPre,color="Model Intigrated"))+
+    ylab("%positive")+
+    facet_grid(~Site)+
+    scale_x_date(limits = c(StartFeces,EndFeces))
 
 
-<!-- Things we are interested in: N1,N2,AVG,Pct_BCoV,PMMoV,Total Total_Flow -->
+FitedData%>%
+    ggplot()+aes(x=roll)+
+    geom_abline(aes(slope =1,intercept=0))+
+    #geom_point(aes(y=orig,color="Reconstructed % Positive"))+
+    geom_point(aes(y=origPre,color="Model Intigrated"))+
+    ylab("model predictions")+
+    xlab("%positive")+
+    facet_grid(~Site)
 
-<!-- ```{r} -->
-<!-- i=3 -->
-<!--   print(AdjustedData%>% -->
-<!--     filter(Site==sites[i])%>% -->
-<!--     filter(!is.na(Cases/Tests))%>% -->
-<!--     ggplot()+aes(x=Date)+ -->
-<!--     geom_point(aes(y=roll))+ -->
-<!--     #geom_point(aes(y=dir))+ -->
-<!--     geom_vline(xintercept = as.Date(StartFeces))+ -->
-<!--     geom_vline(xintercept = as.Date(EndFeces))+ -->
-<!--     scale_x_date(limits = c(as.Date(StartFeces),as.Date(EndFeces)+45))+ -->
-<!--     ggtitle(sites[i])) -->
-<!--   print(AdjustedData%>% -->
-<!--     filter(Site==sites[i])%>% -->
-<!--     ggplot()+aes(x=Date,y=AVG)+ -->
-<!--     geom_smooth(se=FALSE)+ -->
-<!--     geom_point()+ -->
-<!--     geom_vline(xintercept = as.Date(StartFeces))+ -->
-<!--     geom_vline(xintercept = as.Date(EndFeces))+ -->
-<!--     scale_x_date(limits = as.Date(c(StartFeces,EndFeces)))+ -->
-<!--     ggtitle(sites[i])) -->
-<!--   print(AdjustedData%>% -->
-<!--     filter(Site==sites[i])%>% -->
-<!--     ggplot()+aes(x=Date,y=Total_Flow*Pct_BCoV/(PMMoV))+ -->
-<!--     geom_smooth(se=FALSE)+ -->
-<!--     geom_point()+ -->
-<!--     geom_vline(xintercept = as.Date(StartFeces))+ -->
-<!--     geom_vline(xintercept = as.Date(EndFeces))+ -->
-<!--     scale_x_date(limits = as.Date(c(StartFeces,EndFeces)))+ -->
-<!--     ggtitle(sites[i])) -->
-<!--   print(AdjustedData%>% -->
-<!--     filter(Site==sites[i])%>% -->
-<!--     ggplot()+aes(x=Date,y=AVG*Total_Flow*Pct_BCoV/(PMMoV))+ -->
-<!--     geom_smooth(se=FALSE)+ -->
-<!--     geom_point()+ -->
-<!--     geom_vline(xintercept = as.Date(StartFeces))+ -->
-<!--     geom_vline(xintercept = as.Date(EndFeces))+ -->
-<!--     scale_x_date(limits = as.Date(c(StartFeces,EndFeces)))+ -->
-<!--     ggtitle(sites[i])) -->
+```
 
-<!-- ``` -->
+R^2 for the model
+```{r}
+FitedData%>%
+  filter(!is.na(resid))%>%
+  summarize(R2=1-(sum(resid^2)/sum(roll^2,na.rm=T)))
+```
 
-<!-- ```{r} -->
-<!-- AdjustedData%>% -->
-<!--   group_by(Site)%>% -->
-<!--   filter(between(Date, as.Date(StartFeces),as.Date(EndFeces)))%>% -->
-<!--   summarize(mean=mean(roll,na.rm=T)) -->
-<!-- ``` -->
+R^2 for the integrated model
 
-
-
+```{r}
+FitedData%>%
+  filter(!is.na(residFin))%>%
+  summarize(R20=1-(sum(residFin^2)/sum(roll^2)))
+```
