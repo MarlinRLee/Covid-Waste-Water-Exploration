@@ -158,6 +158,8 @@ timefit <- function(x) {
 
 
 ```{r}
+
+#Moves the waterwaste data to match up trends
 ShiftedAmount=0
 
 CovidFileName = "covid.csv"
@@ -172,7 +174,7 @@ water2=water%>%
 MergedData=left_join(covidData,water2,by = c("Date","Site"))%>%
   filter(Site!="UW-LakeShore",Site!="UW-Sellery")
 
-
+#gives the ranges of data for graph movements
 StartTesting=as.Date("2020-4-11")
 EndTesting=as.Date("2021-1-4")
 StartFeces=as.Date("2020-9-20")+ShiftedAmount
@@ -193,6 +195,7 @@ sites=unique(AdjustedData$Site)
 
 
 for (i in 1:length(sites)){
+  #Overview of the data
   tot =AdjustedData%>%
     filter(Site==sites[i])%>%
     ggplot()+aes(x=Date)+
@@ -202,6 +205,7 @@ for (i in 1:length(sites)){
     ylab("# of Positive/# of tests")+
     scale_x_date(limits = c(StartTesting,EndTesting))
     ggtitle(sites[i])
+  #Part we care about
   zoom = AdjustedData%>%
     filter(Site==sites[i])%>%
     filter(!is.na(Cases/Tests))%>%
@@ -213,6 +217,7 @@ for (i in 1:length(sites)){
     ylab("# of Positive/# of tests")+
     scale_x_date(limits = c(StartFeces,EndFeces))+
     ylim(minTest,maxTest)
+  #What the wastewater data says
   mod=AdjustedData%>%
     filter(Site==sites[i])%>%
     ggplot()+aes(x=Date,y=Model)+
@@ -235,6 +240,7 @@ linearMod
 FitedData=AdjustedData%>%
   mutate(fitted =  linearMod[[1]][2]*Model+linearMod[[1]][1],resid = fitted-roll)
 
+#Compares the real results to the model predictions
 FitedData%>%
     ggplot()+aes(x=Date)+
     geom_point(aes(y=Cases/Tests,color="% positive"))+
@@ -243,7 +249,7 @@ FitedData%>%
     facet_grid(~Site)+
     scale_x_date(limits = c(StartFeces,EndFeces))
 
-
+#gives a sense of if the model over or under predicts. Gives a sense of the residue
 FitedData%>%
     ggplot()+aes(x=Cases/Tests)+
     geom_point(aes(y=fitted,color="Model"))+
