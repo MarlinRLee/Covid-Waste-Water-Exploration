@@ -155,8 +155,6 @@ timefit <- function(x) {
 
 
 
-
-
 ```{r}
 ShiftedAmount=5
 
@@ -209,9 +207,9 @@ for (i in 1:length(sites)){
     geom_point(aes(y=der))+
     geom_vline(xintercept = StartFeces)+
     geom_vline(xintercept = EndFeces)+
+    ylab("Diffrence of positive rate from last week")+
     scale_x_date(limits = c(StartTesting,EndTesting))+
     ylim(minTest,maxTest)
-    ylab("diffrence of positive rate from last week")
   zoom = AdjustedData%>%
     filter(Site==sites[i])%>%
     filter(!is.na(Cases/Tests))%>%
@@ -220,7 +218,7 @@ for (i in 1:length(sites)){
     geom_smooth(se=FALSE)+
     geom_vline(xintercept = StartFeces)+
     geom_vline(xintercept = EndFeces)+
-    ylab("diffrence of positive rate from last week")+
+    ylab("Diffrence of positive rate from last week")+
     scale_x_date(limits = c(StartFeces,EndFeces))+
     ylim(minTest,maxTest)
   mod=AdjustedData%>%
