@@ -1,0 +1,130 @@
+---
+title: "TSS VS. TSS (mg/L)"
+author: "`Marlin derived from work by Brian Yandell"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	fig.height = 4,
+	fig.width = 8,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```
+
+This Analysis looks at the TSS variable in the waste water Data set. It finds a difference in behavior between the TSS data from the Dorms collection site and the MMSD collection sites.
+
+The code was derrived from work by the DSI.
+The Original R code file can be found in the [pandemic github repository](https://github.com/UW-Madison-DataScience/pandemic/blob/master/wastewater.Rmd).
+```
+
+
+
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(broom)
+library(zoo)
+library(RcppRoll)
+library(ggformula)
+library(ggpubr)
+kprint <- function(...) {
+  if(interactive()) {
+    print(...)
+  } else {
+    knitr::kable(...)
+  }
+}
+
+
+
+#install.packages("ggpubr")
+```
+
+```{r 2}
+filename <- "../data/wastewater/WW SARS-COV-2 Data V3.xlsx"
+#filename <- "data/wastewater/UW and MMSD Report for SARS-Cov-2 Influent Samples 12.08.20vFinal.xlsx"
+```
+
+```{r warning = FALSE, message = FALSE}
+tmpfn <- function(N1, N2) {
+  AVG <- sqrt(N1 * N2)
+  AVG <- ifelse(is.na(N1), N2, AVG)
+  AVG <- ifelse(is.na(N2), N1, AVG)
+}
+missing_codes <- c("","NA","0","Undetected","Not Detected",
+                   "Field Parameters to be filled in", 
+                   "Inhibited-to be re-ran", "#DIV/0!")
+sheets <- excel_sheets(filename)
+water_MMSD <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 9), "text"),
+                    sheet = 1) %>%
+  rename(Comment = "...12")
+water_Interceptors <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 8), "text"),
+                    sheet = 2) %>%
+  rename(Comment = "...11") %>%
+  mutate(TSS = NA,
+         Site = ifelse(Site == "MMSD P02", "MMSD P2", Site),
+         Site = ifelse(Site == "MMSD P07", "MMSD P7", Site),
+         Site = ifelse(Site == "MMSD P08", "MMSD P8", Site)) %>%
+  select(1:5, TSS, everything())
+water_UW_Dorms <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 9), rep("text", 1)),
+                    sheet = 3) %>%
+  rename(Comment = "...12")
+water <- 
+  bind_rows(water_MMSD,
+            water_Interceptors,
+            water_UW_Dorms) %>%
+  rename(Date = "Collection Date",
+         pH = "pH (SU)",
+         Total_Flow = "Total Flow (MGD)",
+         Conductivity = "Conductivity (uS/CM@25C)",
+         N1 = "N1 (GC/L)",
+         N2 = "N2 (GC/L)",
+         PMMoV = "PMMoV (GC/L)",
+         Pct_BCoV = "% Recovery (BCoV)") %>%
+  filter(!is.na(Site)) %>%
+  mutate(AVG = tmpfn(N1, N2),
+         wt = 2 - is.na(N1) - is.na(N2),
+         Site = ifelse(Site == "UW-D", "UW-LakeShore", Site),
+         Site = ifelse(Site == "UW-S", "UW-Sellery", Site))
+```
+
+
+TSS (mg/L):represents the TSS data in the Dorms. Correlates with Pct_BCoV.
+
+TSS: represents the TSS data in the five Madison Sites. Does not Correlate with Pct_BCoV.
+
+
+```{r}
+#Conductivity, TSS, pH, Total_Flow, N1, N2, AVG, PMMoV, Pct_BCoV, TSS (mg/L)
+
+
+Data=water%>%
+  filter(Site!="UW-LakeShore",Site!="UW-Sellery")
+
+water%>%
+  ggplot()+
+  geom_point(aes(x=`TSS (mg/L)`,y=Pct_BCoV, size=N1))+
+  scale_y_log10()+
+  scale_x_log10()+
+  labs(title="Madison Dorms TSS vs % BCoV Recovery")
+
+water%>%
+  ggplot()+
+  geom_point(aes(x=TSS,y=Pct_BCoV, size=N1))+
+  scale_y_log10()+
+  labs(title="MMSD TSS vs % BCoV Recovery")
+```
