@@ -258,7 +258,8 @@ FitedData=TempData%>%
   group_by(Site)%>%
   mutate(orig=cumsum(ifelse(is.na(der), 0, der)) + der*0,origPre=cumsum(ifelse(is.na(fitted), 0, fitted)) + fitted*0)%>%
   mutate(orig=orig+(startCases/startTest),origPre=origPre+(startCases/startTest))%>%
-  mutate(residFin=origPre-roll)
+  mutate(residFin=origPre-roll)%>%
+  mutate(TotalUnExplaned=roll-mean(roll,na.rm=T))
 
 FitedData%>%
     ggplot()+aes(x=Date)+
@@ -303,8 +304,8 @@ FitedData%>%
 R^2 for the model
 ```{r}
 FitedData%>%
-  filter(!is.na(resid))%>%
-  summarize(R2=1-(sum(resid^2)/sum(roll^2,na.rm=T)))
+  filter(!is.na(resid),!is.na(TotalUnExplaned))%>%
+  summarize(R2=1-(sum(resid^2)/sum(TotalUnExplaned^2)))
 ```
 
 R^2 for the integrated model
@@ -312,5 +313,7 @@ R^2 for the integrated model
 ```{r}
 FitedData%>%
   filter(!is.na(residFin))%>%
-  summarize(R20=1-(sum(residFin^2)/sum(roll^2)))
+  summarize(R20=1-(sum(residFin^2)/sum(TotalUnExplaned^2)))
 ```
+
+

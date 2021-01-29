@@ -160,7 +160,8 @@ timefit <- function(x) {
 ```{r}
 
 #Moves the waterwaste data to match up trends
-ShiftedAmount=0
+ShiftedAmount=7
+print(paste("Time shifted",ShiftedAmount,"Days"))
 
 CovidFileName = "covid.csv"
 covidData = read.csv(CovidFileName)%>%
@@ -238,7 +239,7 @@ linearMod <- lm(roll ~ Model, data=AdjustedData)
 linearMod
 
 FitedData=AdjustedData%>%
-  mutate(fitted =  linearMod[[1]][2]*Model+linearMod[[1]][1],resid = fitted-roll)
+  mutate(fitted =  linearMod[[1]][2]*Model+linearMod[[1]][1],resid = fitted-roll,TotalUnExplaned=roll-mean(roll,na.rm=T))
 
 #Compares the real results to the model predictions
 FitedData%>%
@@ -263,7 +264,7 @@ R^2 for the model
 ```{r}
 FitedData%>%
   filter(!is.na(resid))%>%
-  summarize(R2=1-(sum(resid^2)/sum(roll^2,na.rm=T)))
+  summarize(R2=1-(sum(resid^2)/sum(TotalUnExplaned^2)))
 ```
 
 
