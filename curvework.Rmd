@@ -1,5 +1,5 @@
 ---
-title: "Wastewater, Total_Flow"
+title: "Wastewater, Rate of change of positive tests"
 author: "`Marlin derived from work by Brian Yandell"
 output:
   word_document: default
@@ -17,8 +17,9 @@ knitr::opts_chunk$set(
 ```
 
 ```
-The code was derrived from work by the DSI.
+The code was derived from work by the DSI. This analysis looks at the rate of change of the positive rate of COVID-19 in Madison Wisconsin and matches this with the wastewater data. While offering promising results Difficulties arise when trying to convert it to a measure of positive COVID-19 rates. This and bad fundamentals leads to the conclusion that this is a bad model for Covid-19 positive rates.
 The Original R code file can be found in the [pandemic github repository](https://github.com/UW-Madison-DataScience/pandemic/blob/master/wastewater.Rmd).
+The Code for this R File can be found in the [Covid Waste Water Exploration](https://github.com/MarlinRLee/Covid-Waste-Water-Exploration/blob/main/general%20model%20finding.Rmd)
 ```
 
 
@@ -158,6 +159,8 @@ timefit <- function(x) {
 ```{r}
 ShiftedAmount=5
 
+print(paste("Time shifted",ShiftedAmount,"Days"))
+
 CovidFileName = "covid.csv"
 covidData = read.csv(CovidFileName)%>%
   mutate(ServiceID = ifelse(ServiceID=="MMSD","Madison",paste("MMSD P",ServiceID,sep="")),Date = as.Date(Date , format = "%m/%d/%y"))%>%
@@ -166,6 +169,8 @@ water2=water%>%
   mutate(Date=as.Date(Date))%>%
   mutate(Date=Date+ShiftedAmount)%>%
   mutate(Model=log(N1/(Pct_BCoV*PMMoV)))
+
+print("Model is log(N1/(Pct_BCoV*PMMoV))")
          
 MergedData=left_join(covidData,water2,by = c("Date","Site"))%>%
   filter(Site!="UW-LakeShore",Site!="UW-Sellery")
@@ -198,7 +203,7 @@ for (i in 1:length(sites)){
     geom_point(aes(y=roll))+
     geom_vline(xintercept = StartFeces)+
     geom_vline(xintercept = EndFeces)+
-    ylab("# of Positive/# of tests")+
+    ylab("% of Covid Tests Positive")+
     scale_x_date(limits = c(StartTesting,EndTesting))
     ggtitle(sites[i])
   dir =AdjustedData%>%
@@ -228,13 +233,15 @@ for (i in 1:length(sites)){
     geom_point()+
     geom_vline(xintercept = StartFeces)+
     geom_vline(xintercept = EndFeces)+
-    ylab("log of N1 gene normalized Pct_BCoV, PMMoV")+
+    ylab("log(N1 gene/(Pct_BCoV*PMMoV))")+
     scale_x_date(limits = c(StartFeces,EndFeces))+
     ylim(minSew,maxSew)
     fig=ggarrange(tot,dir, zoom, mod,nrow = 1)
     print(annotate_figure(fig,top = text_grob(sites[i], color = "red", face = "bold", size = 14)))
 }
 ```
+
+Chronic Overprediction for The Madison Sample is likely due to the more frequent sample collection leading to less change per sample.
 
 ```{r}
 modelData=MergedData%>%
@@ -259,7 +266,7 @@ FitedData=TempData%>%
   mutate(orig=cumsum(ifelse(is.na(der), 0, der)) + der*0,origPre=cumsum(ifelse(is.na(fitted), 0, fitted)) + fitted*0)%>%
   mutate(orig=orig+(startCases/startTest),origPre=origPre+(startCases/startTest))%>%
   mutate(residFin=origPre-roll)%>%
-  mutate(TotalUnExplaned=roll-mean(roll,na.rm=T))
+  mutate(TotalVarience=roll-mean(roll,na.rm=T))
 
 FitedData%>%
     ggplot()+aes(x=Date)+
@@ -272,19 +279,32 @@ FitedData%>%
 
 FitedData%>%
     ggplot()+aes(x=der)+
-    geom_point(aes(y=fitted,color="Model"))+
+    geom_point(aes(y=fitted),color="red")+
     geom_abline(aes(slope =1,intercept=0))+
     ylab("model predictions")+
     xlab("change from last week of % positive")+
     facet_grid(~Site)
+```
 
+
+R^2 for the model
+
+```{r}
+FitedData%>%
+  filter(!is.na(resid),!is.na(TotalVarience))%>%
+  summarize(R20=1-(sum(resid^2)/sum(TotalVarience^2)))
+```
+
+Convert model of change of % positive tests into model of % positive test by summing previous values.
+
+```{r}
 
 
 FitedData%>%
     ggplot()+aes(x=Date)+
+    geom_point(aes(y=origPre,color="Model Intigrated"))+
     geom_point(aes(y=Cases/Tests,color="%Positive"))+
     geom_point(aes(y=orig,color="Reconstructed % Positive"))+
-    geom_point(aes(y=origPre,color="Model Intigrated"))+
     ylab("%positive")+
     facet_grid(~Site)+
     scale_x_date(limits = c(StartFeces,EndFeces))
@@ -294,26 +314,20 @@ FitedData%>%
     ggplot()+aes(x=roll)+
     geom_abline(aes(slope =1,intercept=0))+
     #geom_point(aes(y=orig,color="Reconstructed % Positive"))+
-    geom_point(aes(y=origPre,color="Model Intigrated"))+
-    ylab("model predictions")+
+    geom_point(aes(y=origPre),color="red")+
+    ylab("Intigrated model predictions")+
     xlab("%positive")+
     facet_grid(~Site)
 
 ```
 
-R^2 for the model
-```{r}
-FitedData%>%
-  filter(!is.na(resid),!is.na(TotalUnExplaned))%>%
-  summarize(R2=1-(sum(resid^2)/sum(TotalUnExplaned^2)))
-```
 
-R^2 for the integrated model
+R^2 for the integrated model. Terrible prediction for Madison is due to the chronic overprediction resulting from its more frequent sampling. Other sampling locations have otherwise unexplained inaccuracies
 
 ```{r}
 FitedData%>%
-  filter(!is.na(residFin))%>%
-  summarize(R20=1-(sum(residFin^2)/sum(TotalUnExplaned^2)))
+  filter(!is.na(residFin),!is.na(TotalVarience))%>%
+  summarize(R20=1-(sum(residFin^2)/sum(TotalVarience^2)))
 ```
 
 

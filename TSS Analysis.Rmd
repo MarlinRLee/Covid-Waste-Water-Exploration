@@ -20,7 +20,7 @@ knitr::opts_chunk$set(
 
 This Analysis looks at the TSS variable in the waste water Data set. It finds a difference in behavior between the TSS data from the Dorms collection site and the MMSD collection sites.
 
-The code was derrived from work by the DSI.
+The code was derived from work by the DSI.
 The Original R code file can be found in the [pandemic github repository](https://github.com/UW-Madison-DataScience/pandemic/blob/master/wastewater.Rmd).
 ```
 

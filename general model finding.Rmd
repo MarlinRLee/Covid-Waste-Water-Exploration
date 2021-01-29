@@ -1,5 +1,5 @@
 ---
-title: "Wastewater, Total_Flow"
+title: "Wastewater, Model Work"
 author: "`Marlin derived from work by Brian Yandell"
 output:
   word_document: default
@@ -17,8 +17,9 @@ knitr::opts_chunk$set(
 ```
 
 ```
-The code was derrived from work by the DSI.
+The code was derived from work by the DSI. This analysis seeks to model % of tests positive using wastewater Data. This model has logical reasons to be predictive but only finds moderate success when broken down by collection site. Particularly it consistently underpredicts the % positive rate in the P2 district.
 The Original R code file can be found in the [pandemic github repository](https://github.com/UW-Madison-DataScience/pandemic/blob/master/wastewater.Rmd).
+The Code for this R File can be found in the [Marlin Lee waste Water Work](https://github.com/MarlinRLee/Covid-Waste-Water-Exploration/blob/main/general%20model%20finding.Rmd)
 ```
 
 
@@ -160,7 +161,8 @@ timefit <- function(x) {
 ```{r}
 
 #Moves the waterwaste data to match up trends
-ShiftedAmount=7
+ShiftedAmount=5
+
 print(paste("Time shifted",ShiftedAmount,"Days"))
 
 CovidFileName = "covid.csv"
@@ -203,7 +205,7 @@ for (i in 1:length(sites)){
     geom_point(aes(y=roll))+
     geom_vline(xintercept = StartFeces)+
     geom_vline(xintercept = EndFeces)+
-    ylab("# of Positive/# of tests")+
+    ylab("% of Covid Tests Positive")+
     scale_x_date(limits = c(StartTesting,EndTesting))
     ggtitle(sites[i])
   #Part we care about
@@ -211,11 +213,10 @@ for (i in 1:length(sites)){
     filter(Site==sites[i])%>%
     filter(!is.na(Cases/Tests))%>%
     ggplot()+aes(x=Date,y=roll)+
-    geom_point()+
     geom_smooth(se=FALSE)+
     geom_vline(xintercept = StartFeces)+
     geom_vline(xintercept = EndFeces)+
-    ylab("# of Positive/# of tests")+
+    ylab("% of Covid Tests Positive")+
     scale_x_date(limits = c(StartFeces,EndFeces))+
     ylim(minTest,maxTest)
   #What the wastewater data says
@@ -226,7 +227,7 @@ for (i in 1:length(sites)){
     geom_point()+
     geom_vline(xintercept = StartFeces)+
     geom_vline(xintercept = EndFeces)+
-    ylab("log of N1 gene normalized by PMMoV")+
+    ylab("log(N1 gene/PMMoV)")+
     scale_x_date(limits = c(StartFeces,EndFeces))+
     ylim(minSew,maxSew)
     fig=ggarrange(tot, zoom, mod,nrow = 1)
@@ -239,14 +240,14 @@ linearMod <- lm(roll ~ Model, data=AdjustedData)
 linearMod
 
 FitedData=AdjustedData%>%
-  mutate(fitted =  linearMod[[1]][2]*Model+linearMod[[1]][1],resid = fitted-roll,TotalUnExplaned=roll-mean(roll,na.rm=T))
+  mutate(fitted =  linearMod[[1]][2]*Model+linearMod[[1]][1],resid = fitted-roll,TotalVarience=roll-mean(roll,na.rm=T))
 
 #Compares the real results to the model predictions
 FitedData%>%
     ggplot()+aes(x=Date)+
     geom_point(aes(y=Cases/Tests,color="% positive"))+
     geom_point(aes(y=fitted,color="Model"))+
-    ylab("%positive")+
+    ylab("% of Covid Tests Positive")+
     facet_grid(~Site)+
     scale_x_date(limits = c(StartFeces,EndFeces))
 
@@ -256,15 +257,16 @@ FitedData%>%
     geom_point(aes(y=fitted,color="Model"))+
     geom_abline(aes(slope =1,intercept=0))+
     ylab("model predictions")+
-    xlab("% positive")+
+    xlab("% of Covid Tests Positive")+
     facet_grid(~Site)
 ```
 
 R^2 for the model
+
 ```{r}
 FitedData%>%
-  filter(!is.na(resid))%>%
-  summarize(R2=1-(sum(resid^2)/sum(TotalUnExplaned^2)))
+  filter(!is.na(resid),!is.na(TotalVarience))%>%
+  summarize(R2=1-(sum(resid^2)/sum(TotalVarience^2)))
 ```
 
 
