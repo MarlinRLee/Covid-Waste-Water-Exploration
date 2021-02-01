@@ -6,3 +6,5 @@ TSS-Analysis: Compares TSS data from dorms and MMSD
 curvework: Looks at the rate of change of % of covid tests returned Positive and creates a model to predict that
 
 general-model-finding: Uses Waste water data to create a model for % of covid tests returned Positive
+
+R^2HeatMap: Creates a heatmap of the R^2 of diffrent models and time changes
