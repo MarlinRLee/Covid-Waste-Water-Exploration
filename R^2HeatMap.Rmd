@@ -1,0 +1,162 @@
+---
+title: "Wastewater, R^2 heatmap"
+author: "`Marlin derived from work by Brian Yandell"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	fig.height = 7,
+	fig.width = 15,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```
+The code was derived from work by the DSI. Creates a heatmap of the R^2 of diffrent models with diffrent time delays.
+
+The Original R code file can be found in the [pandemic github repository](https://github.com/UW-Madison-DataScience/pandemic/blob/master/wastewater.Rmd).
+The Code for this R File can be found in the [Marlin Lee waste Water Work](https://github.com/MarlinRLee/Covid-Waste-Water-Exploration/blob/main/general%20model%20finding.Rmd)
+```
+
+
+
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(broom)
+library(zoo)
+library(RcppRoll)
+library(ggformula)
+library(ggpubr)
+kprint <- function(...) {
+  if(interactive()) {
+    print(...)
+  } else {
+    knitr::kable(...)
+  }
+}
+```
+
+```{r 2}
+filename <- "../data/wastewater/WW SARS-COV-2 Data V3.xlsx"
+#filename <- "data/wastewater/UW and MMSD Report for SARS-Cov-2 Influent Samples 12.08.20vFinal.xlsx"
+```
+
+```{r warning = FALSE, message = FALSE}
+tmpfn <- function(N1, N2) {
+  AVG <- sqrt(N1 * N2)
+  AVG <- ifelse(is.na(N1), N2, AVG)
+  AVG <- ifelse(is.na(N2), N1, AVG)
+}
+missing_codes <- c("","NA","0","Undetected","Not Detected",
+                   "Field Parameters to be filled in", 
+                   "Inhibited-to be re-ran", "#DIV/0!")
+sheets <- excel_sheets(filename)
+water_MMSD <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 9), "text"),
+                    sheet = 1) %>%
+  rename(Comment = "...12")
+water_Interceptors <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 8), "text"),
+                    sheet = 2) %>%
+  rename(Comment = "...11") %>%
+  mutate(TSS = NA,
+         Site = ifelse(Site == "MMSD P02", "MMSD P2", Site),
+         Site = ifelse(Site == "MMSD P07", "MMSD P7", Site),
+         Site = ifelse(Site == "MMSD P08", "MMSD P8", Site)) %>%
+  select(1:5, TSS, everything())
+water_UW_Dorms <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 9), rep("text", 1)),
+                    sheet = 3) %>%
+  rename(Comment = "...12")
+water <- 
+  bind_rows(water_MMSD,
+            water_Interceptors,
+            water_UW_Dorms) %>%
+  rename(Date = "Collection Date",
+         pH = "pH (SU)",
+         Total_Flow = "Total Flow (MGD)",
+         Conductivity = "Conductivity (uS/CM@25C)",
+         N1 = "N1 (GC/L)",
+         N2 = "N2 (GC/L)",
+         PMMoV = "PMMoV (GC/L)",
+         Pct_BCoV = "% Recovery (BCoV)") %>%
+  filter(!is.na(Site)) %>%
+  mutate(AVG = tmpfn(N1, N2),
+         wt = 2 - is.na(N1) - is.na(N2),
+         Site = ifelse(Site == "UW-D", "UW-LakeShore", Site),
+         Site = ifelse(Site == "UW-S", "UW-Sellery", Site))
+```
+
+```{r}
+ShiftData=function(D,ShiftedAmount){
+  D%>%
+  mutate(Date=as.Date(Date))%>%
+  mutate(Date=Date+ShiftedAmount)
+}
+
+CovidFileName = "covid.csv"
+covidData = read.csv(CovidFileName)%>%
+  mutate(ServiceID = ifelse(ServiceID=="MMSD","Madison",paste("MMSD P",ServiceID,sep="")),Date = as.Date(Date , format = "%m/%d/%y"))%>%
+  rename(Site=ServiceID)%>%
+  group_by(Site)%>%
+  mutate(roll=rollmean(Cases/Tests,k = 7, fill = NA))
+
+
+Model_Names=c("a N1","a log(N1)","b N1/PMMoV","b log(N1/PMMoV)","c N1/(Pct_BCoV*PMMoV)","c log(N1/(Pct_BCoV*PMMoV))","e N1*Total_Flow","d log(N1/PMMoV)+Total_Flow")
+water2=water%>%
+  mutate(Model1=N1)%>%
+  mutate(Model2=log(N1))%>%  
+  mutate(Model3=N1/PMMoV)%>%
+  mutate(Model4=log(N1/PMMoV))%>%
+  mutate(Model5=N1/(Pct_BCoV*PMMoV))%>%
+  mutate(Model6=log(N1/(Pct_BCoV*PMMoV)))%>%
+  mutate(Model7=N1*Total_Flow)%>%
+  mutate(Model8=0)
+```
+
+```{r}
+
+rows=8
+cols=8
+output = matrix(ncol=cols+1, nrow=rows)
+for(i in 1:rows) {
+  for(j in 1:cols) {
+  Inner=inner_join(covidData,ShiftData(water2,4*i-4),by = c("Date","Site"))%>%
+    filter(Site!="UW-LakeShore",Site!="UW-Sellery")%>%
+    filter(!is.na(paste("Model",j,sep="")),!is.na(roll))%>%
+    #select(Date,Site,roll,Model=paste("Model",j,sep=""))
+    rename(Model=paste("Model",j,sep=""))
+  LInner = lm(roll ~ Model, data=Inner)
+  if (j==8){
+    LInner = lm(roll ~ log(N1/PMMoV)+Total_Flow, data=Inner)
+  }
+  output[i,1]=4*i-4
+  output[i,j+1]=summary(LInner)$r.squared
+  }
+}
+outputa = data.frame(output)
+ColNames=c("Offset",Model_Names)
+colnames(outputa)=ColNames
+#output
+#outputa
+```
+
+```{r}
+outputa%>%
+  pivot_longer('a N1':'d log(N1/PMMoV)+Total_Flow',names_to="Models",values_to = "values")%>%
+  ggplot()+
+  geom_tile(aes(x=Offset,y=Models,fill=values))+
+  scale_fill_gradient(low = "black",
+  high = "white")
+```
+
