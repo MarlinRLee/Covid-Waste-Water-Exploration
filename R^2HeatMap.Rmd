@@ -14,10 +14,16 @@ knitr::opts_chunk$set(
 	message = FALSE,
 	warning = FALSE
 )
+#what the results?
+#discription
+#git tag
+#string name
 ```
 
 ```
 The code was derived from work by the DSI. Creates a heatmap of the R^2 of diffrent models with diffrent time delays.
+
+
 
 The Original R code file can be found in the [pandemic github repository](https://github.com/UW-Madison-DataScience/pandemic/blob/master/wastewater.Rmd).
 The Code for this R File can be found in the [Marlin Lee waste Water Work](https://github.com/MarlinRLee/Covid-Waste-Water-Exploration/blob/main/general%20model%20finding.Rmd)
@@ -34,6 +40,7 @@ library(zoo)
 library(RcppRoll)
 library(ggformula)
 library(ggpubr)
+library(heatmap3)
 kprint <- function(...) {
   if(interactive()) {
     print(...)
@@ -44,7 +51,7 @@ kprint <- function(...) {
 ```
 
 ```{r 2}
-filename <- "../data/wastewater/WW SARS-COV-2 Data V3.xlsx"
+filename <- "../../data/wastewater/WW SARS-COV-2 Data V3.xlsx"
 #filename <- "data/wastewater/UW and MMSD Report for SARS-Cov-2 Influent Samples 12.08.20vFinal.xlsx"
 ```
 
@@ -104,7 +111,7 @@ ShiftData=function(D,ShiftedAmount){
   mutate(Date=Date+ShiftedAmount)
 }
 
-CovidFileName = "covid.csv"
+CovidFileName = "../covid.csv"
 covidData = read.csv(CovidFileName)%>%
   mutate(ServiceID = ifelse(ServiceID=="MMSD","Madison",paste("MMSD P",ServiceID,sep="")),Date = as.Date(Date , format = "%m/%d/%y"))%>%
   rename(Site=ServiceID)%>%
@@ -112,35 +119,32 @@ covidData = read.csv(CovidFileName)%>%
   mutate(roll=rollmean(Cases/Tests,k = 7, fill = NA))
 
 
-Model_Names=c("a N1","a log(N1)","b N1/PMMoV","b log(N1/PMMoV)","c N1/(Pct_BCoV*PMMoV)","c log(N1/(Pct_BCoV*PMMoV))","e N1*Total_Flow","d log(N1/PMMoV)+Total_Flow")
-water2=water%>%
-  mutate(Model1=N1)%>%
-  mutate(Model2=log(N1))%>%  
-  mutate(Model3=N1/PMMoV)%>%
-  mutate(Model4=log(N1/PMMoV))%>%
-  mutate(Model5=N1/(Pct_BCoV*PMMoV))%>%
-  mutate(Model6=log(N1/(Pct_BCoV*PMMoV)))%>%
-  mutate(Model7=N1*Total_Flow)%>%
-  mutate(Model8=0)
+Model_Names=c("log(N1)+log(PMMoV) + Site + Total_Flow","log(N1)+log(PMMoV)+ Site","log(N1) +log(PMMoV)+ Site + Total_Flow+log(N2)","Site")
+
 ```
 
 ```{r}
-
-rows=8
-cols=8
-output = matrix(ncol=cols+1, nrow=rows)
-for(i in 1:rows) {
+MaxTimeSkip=60
+cols=length(Model_Names)
+skip=5
+output = matrix(ncol=cols+1, nrow=MaxTimeSkip/skip)
+for(i in 1:(MaxTimeSkip/skip)) {
   for(j in 1:cols) {
-  Inner=inner_join(covidData,ShiftData(water2,4*i-4),by = c("Date","Site"))%>%
-    filter(Site!="UW-LakeShore",Site!="UW-Sellery")%>%
-    filter(!is.na(paste("Model",j,sep="")),!is.na(roll))%>%
-    #select(Date,Site,roll,Model=paste("Model",j,sep=""))
-    rename(Model=paste("Model",j,sep=""))
-  LInner = lm(roll ~ Model, data=Inner)
-  if (j==8){
-    LInner = lm(roll ~ log(N1/PMMoV)+Total_Flow, data=Inner)
+  M=skip*i-MaxTimeSkip%/%2
+  Inner=inner_join(covidData,ShiftData(water,M),by = c("Date","Site"))
+  if (j==1){
+    LInner = lm(roll ~ log(N1)+log(PMMoV) + Site, data=Inner)
   }
-  output[i,1]=4*i-4
+  if (j==2){
+    LInner = lm(roll ~ log(N1)+log(PMMoV)+ Site + Total_Flow, data=Inner)
+  }
+  if (j==3){
+    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+Site+Total_Flow, data=Inner)
+  }
+  if (j==4){
+    LInner = lm(roll ~ Site, data=Inner)
+  }
+  output[i,1]=M
   output[i,j+1]=summary(LInner)$r.squared
   }
 }
@@ -148,15 +152,33 @@ outputa = data.frame(output)
 ColNames=c("Offset",Model_Names)
 colnames(outputa)=ColNames
 #output
-#outputa
+
+#LInner
+#How complete a picture
+#narrow down for contrast
+#get map to tell story
+#get hierarchy framework
+#10 linear models with cross interactions
+#
 ```
+17         22
+waste ->   pop
+pop       
+comment out vs build into a pipe 
+
+
 
 ```{r}
 outputa%>%
-  pivot_longer('a N1':'d log(N1/PMMoV)+Total_Flow',names_to="Models",values_to = "values")%>%
+  pivot_longer('log(N1)+log(PMMoV) + Site + Total_Flow':'Site',names_to="Models",values_to = "values")%>%
   ggplot()+
   geom_tile(aes(x=Offset,y=Models,fill=values))+
   scale_fill_gradient(low = "black",
   high = "white")
+
+#find heatmap package:
+#heat map2
+#use color for more use
+#automatically shorting
 ```
 
