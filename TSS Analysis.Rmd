@@ -102,7 +102,6 @@ water <-
          Site = ifelse(Site == "UW-S", "UW-Sellery", Site))
 ```
 
-
 TSS (mg/L):represents the TSS data in the Dorms. Correlates with Pct_BCoV.
 
 TSS: represents the TSS data in the five Madison Sites. Does not Correlate with Pct_BCoV.
@@ -110,21 +109,41 @@ TSS: represents the TSS data in the five Madison Sites. Does not Correlate with 
 
 ```{r}
 #Conductivity, TSS, pH, Total_Flow, N1, N2, AVG, PMMoV, Pct_BCoV, TSS (mg/L)
+#log(N1)
 
 
-Data=water%>%
-  filter(Site!="UW-LakeShore",Site!="UW-Sellery")
+water2=water%>%
+  filter(Site=="UW-Sellery"|Site=="UW-LakeShore"|Site=="Madison")%>%
+  mutate(TSS=ifelse(is.na(`TSS (mg/L)`), TSS, `TSS (mg/L)`))
 
-water%>%
+colo=setNames(object = scales::hue_pal()(length(unique(water2$Site))), nm = unique(water2$Site))
+water2%>%
+  filter(Site=="UW-Sellery"|Site=="UW-LakeShore")%>%
   ggplot()+
-  geom_point(aes(x=`TSS (mg/L)`,y=Pct_BCoV, size=N1))+
+  aes(y=Pct_BCoV, size=N1,x=TSS,color=Site)+
+  geom_point()+
+  scale_color_manual(values = colo)+
   scale_y_log10()+
   scale_x_log10()+
-  labs(title="Madison Dorms TSS vs % BCoV Recovery")
+  labs(title= "Lakeshore TSS distribution differs from Sellery", y="Percent BCOV Recovery", x = "TSS")
 
-water%>%
+water2%>%
+  filter(Site=="UW-Sellery"|Site=="Madison")%>%
   ggplot()+
-  geom_point(aes(x=TSS,y=Pct_BCoV, size=N1))+
+  aes(y=Pct_BCoV, size=N1,x=TSS,color=Site)+
+  geom_point()+
+  scale_color_manual(values = colo)+
   scale_y_log10()+
-  labs(title="MMSD TSS vs % BCoV Recovery")
+  scale_x_log10()+
+  labs(title= "Lakeshore TSS distribution differs from Sellery", y="Percent BCOV Recovery", x = "TSS")
+
+water2%>%
+  ggplot()+
+  aes(y=Pct_BCoV, size=N1,x=TSS,color=Site)+
+  geom_point()+
+  scale_color_manual(values = colo)+
+  scale_y_log10()+
+  scale_x_log10()+
+  labs(title= "MMSD TSS",subtitle = "Note difference in x axis range", y="Percent BCOV Recovery", x = "TSS")
+
 ```
