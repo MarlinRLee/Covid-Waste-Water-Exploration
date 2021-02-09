@@ -9,8 +9,8 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
 	echo = FALSE,
-	fig.height = 4,
-	fig.width = 6,
+	fig.height = 2,
+	fig.width = 3,
 	message = FALSE,
 	warning = FALSE
 )
@@ -43,7 +43,7 @@ kprint <- function(...) {
 ```
 
 ```{r 2}
-filename <- "../data/wastewater/WW SARS-COV-2 Data V3.xlsx"
+filename <- "../../data/wastewater/WW SARS-COV-2 Data V3.xlsx"
 #filename <- "data/wastewater/UW and MMSD Report for SARS-Cov-2 Influent Samples 12.08.20vFinal.xlsx"
 ```
 
@@ -156,15 +156,28 @@ timefit <- function(x) {
 
 
 #Conductivity, TSS, pH, Total_Flow, N1, N2, AVG, PMMoV, Pct_BCoV, TSS (mg/L)
+#ToDo:
+#1/2 looking at R^2 over a bunch of timeshifts
+#1)
+# Model W/O Site: log(N1), log(PMMoV), log(N2), #Total_Flow or log(Total_Flow)
+# add: Compare smooth cases vs smooth model
+#2)
+# Devide P2 and compare
+#3)
+# try to define 3
+#new questions:
+#How to use Site // How to involve TotalFlow
+#old questions
+#TSS // P2 // Shifting
+Curves
 
-
-```{r}
+```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=12}
 #Moves the waterwaste data to match up trends
-ShiftedAmount=-18
-
+ShiftedAmount=10
+#10 vs -18
 print(paste("Time shifted",ShiftedAmount,"Days"))
 
-CovidFileName = "covid.csv"
+CovidFileName = "../covid.csv"
 covidData = read.csv(CovidFileName)%>%
   mutate(ServiceID = ifelse(ServiceID=="MMSD","Madison",paste("MMSD P",ServiceID,sep="")),Date = as.Date(Date , format = "%m/%d/%y"))%>%
   rename(Site=ServiceID)%>%
@@ -172,11 +185,9 @@ covidData = read.csv(CovidFileName)%>%
   #mutate(roll=rollmean(Cases/Tests,k = 1, fill = NA))
   mutate(roll=Cases/Tests)
 
-
 water2=water%>%
   mutate(Date=as.Date(Date))%>%
   mutate(Date=Date+ShiftedAmount)
-
 
 MergedData=left_join(covidData,water2,by = c("Date","Site"))%>%
   filter(Site!="UW-LakeShore",Site!="UW-Sellery")
@@ -184,7 +195,7 @@ MergedData=left_join(covidData,water2,by = c("Date","Site"))%>%
 
 Inner=inner_join(covidData,water2,by = c("Date","Site"))%>%
     filter(Site!="UW-LakeShore",Site!="UW-Sellery")
-LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+Site+Total_Flow, data=Inner)
+LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+Site, data=Inner)
 
 MergedData$fitted=predict.lm(LInner,MergedData,interval="none")
 
@@ -204,21 +215,89 @@ maxTest=max(AdjustedData$roll,na.rm=T)
 sites=unique(AdjustedData$Site)
 
 LInner
+
+myplots <- list()
 for (i in 1:length(sites)){
-  zom=AdjustedData%>%
-    filter(Site==sites[i])%>%
-    ggplot()+aes(x=Date)+
+  SiteData=AdjustedData%>%
+    filter(Site==sites[i])
+  myplots[[i]]=
+    ggplot(data=SiteData)+aes(x=Date)+
+    #geom_point(aes(y=roll-fitted))+
+    #geom_point(aes(y=roll,colour="Percent Positive"))+
+    #geom_point(aes(y=fitted,colour="Model"))+
+    geom_smooth(aes(y=roll,colour="Percent Positive"))+
+    geom_smooth(aes(y=fitted,colour="Model"))+
+    ylab("% of Covid Tests Positive")+
+    ylim(minTest,maxTest)+
+    scale_x_date(limits = c(StartFeces,EndFeces),labels = date_format("%b"))
+}
+
+ggarrange(plotlist = myplots,ncol = 2, nrow = 3)
+```
+
+Points
+
+```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=12}
+#Moves the waterwaste data to match up trends
+ShiftedAmount=10
+#10 vs -18
+
+CovidFileName = "../covid.csv"
+covidData = read.csv(CovidFileName)%>%
+  mutate(ServiceID = ifelse(ServiceID=="MMSD","Madison",paste("MMSD P",ServiceID,sep="")),Date = as.Date(Date , format = "%m/%d/%y"))%>%
+  rename(Site=ServiceID)%>%
+  group_by(Site)%>%
+  #mutate(roll=rollmean(Cases/Tests,k = 1, fill = NA))
+  mutate(roll=Cases/Tests)
+
+water2=water%>%
+  mutate(Date=as.Date(Date))%>%
+  mutate(Date=Date+ShiftedAmount)
+
+MergedData=left_join(covidData,water2,by = c("Date","Site"))%>%
+  filter(Site!="UW-LakeShore",Site!="UW-Sellery")
+
+
+Inner=inner_join(covidData,water2,by = c("Date","Site"))%>%
+    filter(Site!="UW-LakeShore",Site!="UW-Sellery")
+LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+Site, data=Inner)
+
+MergedData$fitted=predict.lm(LInner,MergedData,interval="none")
+
+
+AdjustedData=MergedData#%>%
+   # mutate(fitted=rollapply(fitted, 7, mean, na.rm = TRUE,fill = NA))
+
+
+
+#gives the ranges of data for graph movements
+StartTesting=as.Date("2020-4-11")
+EndTesting=as.Date("2021-1-4")
+StartFeces=as.Date("2020-9-20")+ShiftedAmount
+EndFeces=as.Date("2020-11-25")+ShiftedAmount
+
+minSew=min(AdjustedData$Model,na.rm=TRUE)
+maxSew=max(AdjustedData$Model,na.rm=T)
+minTest=min(AdjustedData$roll,na.rm=T)
+maxTest=max(AdjustedData$roll,na.rm=T)
+sites=unique(AdjustedData$Site)
+
+
+myplots <- list()
+for (i in 1:length(sites)){
+  SiteData=AdjustedData%>%
+    filter(Site==sites[i])
+  myplots[[i]]=
+    ggplot(data=SiteData)+aes(x=Date)+
     #geom_point(aes(y=roll-fitted))+
     geom_point(aes(y=roll,colour="Percent Positive"))+
     geom_point(aes(y=fitted,colour="Model"))+
-    #geom_smooth(aes(,y=fitted),colour="red")+
     ylab("% of Covid Tests Positive")+
     ylim(minTest,maxTest)+
-    scale_x_date(limits = c(StartFeces,EndFeces))
-  #What the wastewater data says
-    print(annotate_figure(zom,top = text_grob(sites[i], color = "red", face = "bold", size = 14)))
+    scale_x_date(limits = c(StartFeces,EndFeces),labels = date_format("%b"))+
+    ggtitle(sites[i])
 }
+#ggtitle(text_grob(sites[i], color = "red", face = "bold", size = 14))
 
-cor.test(AdjustedData$roll,AdjustedData$fitted)
-
+ggarrange(plotlist = myplots,ncol = 2, nrow = 3)
 ```

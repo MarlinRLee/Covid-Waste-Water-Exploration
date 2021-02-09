@@ -21,7 +21,7 @@ knitr::opts_chunk$set(
 ```
 
 ```
-The code was derived from work by the DSI. Creates a heatmap of the R^2 of diffrent models with diffrent time delays.
+The code was derived from work by the DSI. Creates a heatmap of the R^2 of diffrent models with diffrent time delays. Total Flow seems to either be unhelpful or even detrimental
 
 
 
@@ -119,30 +119,33 @@ covidData = read.csv(CovidFileName)%>%
   mutate(roll=rollmean(Cases/Tests,k = 7, fill = NA))
 
 
-Model_Names=c("log(N1)+log(PMMoV) + Site + Total_Flow","log(N1)+log(PMMoV)+ Site","log(N1) +log(PMMoV)+ Site + Total_Flow+log(N2)","Site")
+Model_Names=c("log(N1)","log(N1)+log(PMMoV)","log(N2)+log(N1)+log(PMMoV)","log(N2)+log(N1)+log(PMMoV)+ log(Total_Flow)","log(N2)+log(N1)+log(PMMoV)+ Total_Flow")
 
 ```
 
 ```{r}
-MaxTimeSkip=60
+MaxTimeSkip=20
 cols=length(Model_Names)
-skip=5
+skip=1
 output = matrix(ncol=cols+1, nrow=MaxTimeSkip/skip)
 for(i in 1:(MaxTimeSkip/skip)) {
   for(j in 1:cols) {
-  M=skip*i-MaxTimeSkip%/%2
+  M=skip*i-skip
   Inner=inner_join(covidData,ShiftData(water,M),by = c("Date","Site"))
   if (j==1){
-    LInner = lm(roll ~ log(N1)+log(PMMoV) + Site, data=Inner)
+    LInner = lm(roll ~ log(N1), data=Inner)
   }
   if (j==2){
-    LInner = lm(roll ~ log(N1)+log(PMMoV)+ Site + Total_Flow, data=Inner)
+    LInner = lm(roll ~ log(N1)+log(PMMoV), data=Inner)
   }
   if (j==3){
-    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+Site+Total_Flow, data=Inner)
+    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV), data=Inner)
   }
   if (j==4){
-    LInner = lm(roll ~ Site, data=Inner)
+    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+ log(Total_Flow), data=Inner)
+  }
+  if (j==5){
+    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+ Total_Flow, data=Inner)
   }
   output[i,1]=M
   output[i,j+1]=summary(LInner)$r.squared
@@ -160,6 +163,7 @@ colnames(outputa)=ColNames
 #get hierarchy framework
 #10 linear models with cross interactions
 #
+
 ```
 17         22
 waste ->   pop
@@ -170,7 +174,7 @@ comment out vs build into a pipe
 
 ```{r}
 outputa%>%
-  pivot_longer('log(N1)+log(PMMoV) + Site + Total_Flow':'Site',names_to="Models",values_to = "values")%>%
+  pivot_longer('log(N1)':'log(N2)+log(N1)+log(PMMoV)+ Total_Flow',names_to="Models",values_to = "values")%>%
   ggplot()+
   geom_tile(aes(x=Offset,y=Models,fill=values))+
   scale_fill_gradient(low = "black",
@@ -180,5 +184,10 @@ outputa%>%
 #heat map2
 #use color for more use
 #automatically shorting
+#use each of 5 sep see if interp
+#N1-Cases might change on site due to collection / PMMoV might not depend on Site : gain power between sites/
+
+#Model P2 separately/rest in togeth/Mix Mod/Learn how mix models work
+#Know how to do->try to abstract/generalized
 ```
 
