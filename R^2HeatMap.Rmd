@@ -105,6 +105,16 @@ water <-
 ```
 
 ```{r}
+####Fills in missing n2 values
+N2Fixer = lm(N2~N1, data=water)
+water$temp=predict.lm(N2Fixer,water,interval="none")
+water=water%>%
+  mutate(N2=ifelse(is.na(N2),temp,N2))
+water=water%>%
+  select(-temp)
+###
+
+
 ShiftData=function(D,ShiftedAmount){
   D%>%
   mutate(Date=as.Date(Date))%>%

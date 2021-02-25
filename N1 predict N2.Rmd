@@ -126,8 +126,6 @@ N2Fixer = lm(N2~N1, data=water)
 water$temp=predict.lm(N2Fixer,water,interval="none")
 water2=water%>%
   mutate(N2=ifelse(is.na(N2),temp,N2))
-#water2=water2%>%
-#  select(-temp)
 ###
 summary(N2Fixer)
 ```
