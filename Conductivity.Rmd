@@ -93,71 +93,17 @@ water <-
          N1 = "N1 (GC/L)",
          N2 = "N2 (GC/L)",
          PMMoV = "PMMoV (GC/L)",
-         Pct_BCoV = "% Recovery (BCoV)") %>%
+         Pct_BCoV = "% Recovery (BCoV)",
+         temp='TSS (mg/L)') %>%
   filter(!is.na(Site)) %>%
   mutate(AVG = tmpfn(N1, N2),
          wt = 2 - is.na(N1) - is.na(N2),
          Site = ifelse(Site == "UW-D", "UW-LakeShore", Site),
-         Site = ifelse(Site == "UW-S", "UW-Sellery", Site))
+         Site = ifelse(Site == "UW-S", "UW-Sellery", Site))%>%
+  mutate(TSS=ifelse(is.na(TSS),temp,TSS))%>%
+  select(-temp)
 ```
 
-```{r}
-waters <- water %>%
-  pivot_longer(Conductivity:Pct_BCoV, names_to = "assay", values_to = "values") %>%
-  filter(!is.na(values)) %>%
-  mutate(wt = ifelse(assay == "AVG", wt, 1))
-```
-
-```{r}
-predfn <- function(x) {
-  x$pred <- 10^predict(lm(log10(values) ~ Date + Site, x, weight = wt))
-  x
-}
-addpred <- function(x) {
-  bind_rows(
-    map(
-      split(x, x$assay),
-      predfn),
-    .id = "assay")
-}
-```
-
-```{r}
-fitfn <- function(x, add = FALSE, ...) {
-  if(add) {
-    form <- formula(log10(values) ~ Date + Site)
-    elems <- 2:3
-    test <- "drop1"
-  } else {
-    form <- formula(log10(values) ~ Date * Site)
-    elems <- 3
-    test <- "anova"
-  }
-  fit <- lm(form, x, weight = wt)
-  switch(test,
-         anova = broom::tidy(anova(fit)[elems,]),
-         drop1 = broom::tidy(drop1(fit, fit, test = "F")[elems,])) %>%
-    select(term, statistic, p.value) %>%
-    mutate(statistic = round(statistic, 2),
-           p.value = signif(p.value, 3))
-}
-sumfn <- function(x, ...) {
-  bind_rows(
-    map(
-      split(x, x$assay),
-      fitfn, ...),
-    .id = "assay") %>%
-    arrange(term, assay)
-}
-timefit <- function(x) {
-  bind_rows(
-    sumfn(x, TRUE),
-    sumfn(x)) %>%
-  select(-statistic) %>%
-  pivot_wider(names_from = "term", values_from = "p.value") %>%
-  kprint()
-}
-```
 
 ```{r}
 CovidFileName = "../covid.csv"
@@ -168,93 +114,104 @@ covidData = read.csv(CovidFileName)%>%
   #mutate(roll=rollmean(Cases/Tests,k = 1, fill = NA))
   mutate(roll=Cases/Tests)
 
-MergedData=left_join(covidData,water,by = c("Date","Site"))%>%
-  filter(Site!="UW-LakeShore",Site!="UW-Sellery", Site!="Madison")
+MergedData=full_join(covidData,water,by = c("Date","Site"))
 
 
-Inner=inner_join(covidData,water,by = c("Date","Site"))%>%
-    filter(Site!="UW-LakeShore",Site!="UW-Sellery")
+Inner=inner_join(covidData,water,by = c("Date","Site"))
 ```
 
 Variables Vs. Date
 
 ```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=12}
-
+colo=setNames(object = scales::hue_pal()(length(unique(water$Site))), nm = unique(water$Site))
+    
 myplots <- list()
-myplots[[1]]=Inner%>%
+myplots[[1]]=MergedData%>%
   ggplot()+
   aes(x=Date)+
-  geom_point(aes(y=Pct_BCoV))+
-  scale_y_log10()+
-  facet_wrap(~Site)
-myplots[[2]]=Inner%>%
+  geom_smooth(aes(y=Conductivity,color=Site))+
+  scale_color_manual(values = colo)+
+  scale_y_log10()
+myplots[[3]]=MergedData%>%
   ggplot()+
   aes(x=Date)+
-  geom_point(aes(y=roll))+
-  facet_wrap(~Site)
-myplots[[3]]=Inner%>%
-  ggplot()+
-  aes(x=Date)+
-  geom_point(aes(y=Cases))+
-  facet_wrap(~Site)
-myplots[[4]]=Inner%>%
-  ggplot()+
-  aes(x=Date)+
-  geom_point(aes(y=pH))+
-  facet_wrap(~Site)
+  geom_smooth(aes(y=Pct_BCoV,color=Site))+
+  scale_color_manual(values = colo)+
+  scale_y_log10()
 myplots[[5]]=Inner%>%
   ggplot()+
   aes(x=Date)+
-  geom_point(aes(y=TSS))+
-  facet_wrap(~Site)
-myplots[[6]]=Inner%>%
+  scale_color_manual(values = colo)+
+  geom_smooth(aes(y=roll,color=Site))
+myplots[[7]]=Inner%>%
   ggplot()+
   aes(x=Date)+
-  geom_point(aes(y=log(N1)))+
-  facet_wrap(~Site)
-ggarrange(plotlist = myplots,ncol = 2, nrow = 3)
+  scale_color_manual(values = colo)+
+  geom_smooth(aes(y=Cases,color=Site))
+myplots[[9]]=MergedData%>%
+  ggplot()+
+  aes(x=Date)+
+  scale_color_manual(values = colo)+
+  geom_smooth(aes(y=pH,color=Site))
+myplots[[11]]=MergedData%>%
+  ggplot()+
+  aes(x=Date)+
+  scale_color_manual(values = colo)+
+  geom_smooth(aes(y=TSS,color=Site))
+myplots[[13]]=MergedData%>%
+  ggplot()+
+  aes(x=Date)+
+  scale_color_manual(values = colo)+
+  geom_smooth(aes(y=log(N1),color=Site))
+a=ggarrange(plotlist = myplots,ncol = 1, nrow = 7)
 #roll,Cases,pH,Total_Flow,TSS,N1,N2,PMMoV,Pct_BCoV,TSS (mg/L)
 ```
 
 Conductivity Vs. Variables
 
-```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=12}
+```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=18}
 
-myplots <- list()
-myplots[[1]]=Inner%>%
+myplots[[4]]=MergedData%>%
   ggplot()+
   aes(x=Conductivity)+
-  geom_point(aes(y=Pct_BCoV))+
+  scale_color_manual(values = colo)+
+  geom_smooth(aes(y=Pct_BCoV,color=Site))+
   scale_y_log10()+
-  facet_wrap(~Site)
-myplots[[2]]=Inner%>%
-  ggplot()+
-  aes(x=Conductivity)+
-  geom_point(aes(y=roll))+
-  facet_wrap(~Site)
-myplots[[3]]=Inner%>%
-  ggplot()+
-  aes(x=Conductivity)+
-  geom_point(aes(y=Cases))+
-  facet_wrap(~Site)
-myplots[[4]]=Inner%>%
-  ggplot()+
-  aes(x=Conductivity)+
-  geom_point(aes(y=pH))+
-  facet_wrap(~Site)
-myplots[[5]]=Inner%>%
-  ggplot()+
-  aes(x=Conductivity)+
-  geom_point(aes(y=TSS))+
-  facet_wrap(~Site)
+  scale_x_log10()
 myplots[[6]]=Inner%>%
   ggplot()+
   aes(x=Conductivity)+
-  geom_point(aes(y=log(N1)))+
-  facet_wrap(~Site)
-ggarrange(plotlist = myplots,ncol = 2, nrow = 3)
+  scale_color_manual(values = colo)+
+  geom_smooth(aes(y=roll,color=Site))
+myplots[[8]]=Inner%>%
+  ggplot()+
+  aes(x=Conductivity)+
+  scale_color_manual(values = colo)+
+  geom_smooth(aes(y=Cases,color=Site))
+myplots[[10]]=MergedData%>%
+  ggplot()+
+  aes(x=Conductivity)+
+  scale_color_manual(values = colo)+
+  geom_smooth(aes(y=pH,color=Site))
+myplots[[12]]=MergedData%>%
+  ggplot()+
+  aes(x=Conductivity)+
+  scale_color_manual(values = colo)+
+  geom_smooth(aes(y=TSS,color=Site))
+myplots[[14]]=MergedData%>%
+  ggplot()+
+  aes(x=Conductivity)+
+  scale_color_manual(values = colo)+
+  geom_smooth(aes(y=log(N1),color=Site))
+b=ggarrange(plotlist = myplots,ncol = 1, nrow = 6)
 #roll,Cases,pH,Total_Flow,TSS,N1,N2,PMMoV,Pct_BCoV,TSS (mg/L)
 ```
+
+```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=18}
+annotate_figure(ggarrange(plotlist = myplots,ncol = 2, nrow = 7,common.legend = T,legend="right",labels = c("Var Vs. Date","Var Vs. Conductivity"),hjust=-2.7,vjust=-.5,font.label= list(size = 9)),top="Conductivity report")
+
+```
+
 
 correlation conductivity vs variables
 
@@ -262,10 +219,11 @@ correlation conductivity vs variables
 data.frame(
 roll=cor.test(Inner$Conductivity,Inner$roll)[[4]],
 Cases=cor.test(Inner$Conductivity,Inner$Cases)[[4]],
-logN1=cor.test(Inner$Conductivity,log(Inner$N1))[[4]],
-pH=cor.test(Inner$Conductivity,Inner$pH)[[4]],
-TSS=cor.test(Inner$Conductivity,Inner$TSS)[[4]],
-Pct_BCoV=cor.test(Inner$Conductivity,Inner$Pct_BCoV)[[4]]
+logN1=cor.test(MergedData$Conductivity,log(MergedData$N1))[[4]],
+pH=cor.test(MergedData$Conductivity,MergedData$pH)[[4]],
+TSS=cor.test(MergedData$Conductivity,MergedData$TSS)[[4]],
+Pct_BCoV=cor.test(MergedData$Conductivity,MergedData$Pct_BCoV)[[4]]
 )
 #roll,Cases,pH,Total_Flow,TSS,N1,N2,PMMoV,Pct_BCoV,TSS (mg/L)
 ```
+
