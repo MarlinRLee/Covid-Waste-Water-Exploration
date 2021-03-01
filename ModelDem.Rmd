@@ -208,7 +208,10 @@ Inner=inner_join(covidData,water2,by = c("Date","Site"))%>%
     filter(Site!="UW-LakeShore",Site!="UW-Sellery")
 LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+Site, data=Inner)
 
+
+MergedData$fittedMo=c(tail(predict.lm(LInner,MergedData,interval="none"), -ShiftedAmount), rep(NA, ShiftedAmount))
 MergedData$fitted=predict.lm(LInner,MergedData,interval="none")
+
 
 AdjustedData=MergedData
 print(paste("R^2:",summary(LInner)$r.squared))
@@ -216,7 +219,7 @@ print(paste("R^2:",summary(LInner)$r.squared))
 #gives the ranges of data for graph movements
 StartTesting=as.Date("2020-4-11")
 EndTesting=as.Date("2021-1-4")
-StartFeces=as.Date("2020-9-20")+ShiftedAmount
+StartFeces=as.Date("2020-9-20")
 EndFeces=as.Date("2020-11-25")+ShiftedAmount
 
 minSew=min(AdjustedData$Model,na.rm=TRUE)
@@ -238,6 +241,7 @@ for (i in 1:length(sites)){
     #geom_point(aes(y=fitted,colour="Model"))+
     geom_smooth(aes(y=roll,colour="Percent Positive"))+
     geom_smooth(aes(y=fitted,colour="Model"))+
+    geom_smooth(aes(y=fittedMo,colour="Model unmoved"))+
     ylab("% of Covid Tests Positive")+
     ylim(minTest,maxTest)+
     scale_x_date(limits = c(StartFeces,EndFeces),labels = date_format("%b"))+
@@ -261,6 +265,7 @@ for (i in 1:length(sites)){
     #geom_point(aes(y=roll-fitted))+
     geom_point(aes(y=roll,colour="Percent Positive"))+
     geom_point(aes(y=fitted,colour="Model"))+
+    geom_point(aes(y=fittedMo,colour="Model unmoved"))+
     ylab("% of Covid Tests Positive")+
     ylim(minTest,maxTest)+
     scale_x_date(limits = c(StartFeces,EndFeces),labels = date_format("%b"))+
