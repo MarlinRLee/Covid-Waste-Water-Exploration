@@ -49,7 +49,8 @@ kprint <- function(...) {
 ```
 
 ```{r 2}
-filename <- "../data/wastewater/WW SARS-COV-2 Data V3.xlsx"
+filename <- "data/WW SARS-COV-2 Data V3.xlsx"
+CovidFileName = "data/covid.csv"
 #filename <- "data/wastewater/UW and MMSD Report for SARS-Cov-2 Influent Samples 12.08.20vFinal.xlsx"
 ```
 

@@ -48,7 +48,8 @@ kprint <- function(...) {
 ```
 
 ```{r 2}
-filename <- "../../data/wastewater/WW SARS-COV-2 Data V3.xlsx"
+filename <- "data/WW SARS-COV-2 Data V3.xlsx"
+CovidFileName = "data/covid.csv"
 #filename <- "data/wastewater/UW and MMSD Report for SARS-Cov-2 Influent Samples 12.08.20vFinal.xlsx"
 ```
 
@@ -106,7 +107,6 @@ water <-
 
 
 ```{r}
-CovidFileName = "../covid.csv"
 covidData = read.csv(CovidFileName)%>%
   mutate(ServiceID = ifelse(ServiceID=="MMSD","Madison",paste("MMSD P",ServiceID,sep="")),Date = as.Date(Date , format = "%m/%d/%y"))%>%
   rename(Site=ServiceID)%>%
