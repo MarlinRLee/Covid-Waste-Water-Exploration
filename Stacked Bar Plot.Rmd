@@ -173,7 +173,7 @@ MadMass=DataFrame%>%
   filter(Site=="MC ")%>%
   select(Date,SC2Mass,PMMoVMass)
 
-inner_join(SumInter,MadMass,by = c("Date"))
+sumar=inner_join(SumInter,MadMass,by = c("Date"))
 
 DataFrame=DataFrame%>%
   filter(Site!="MC ")
@@ -181,10 +181,18 @@ DataFrame=DataFrame%>%
 
 ggplot() + 
   geom_bar(data=DataFrame, aes(fill=Site, y=SC2Mass, x=Date),position="stack", stat="identity")+
-  geom_point(data=MadMass,aes(x=Date,y=SC2Mass),color="blue",size=2)
+  geom_errorbar(data=MadMass,aes(x=Date,ymin = 0, ymax = SC2Mass))+
+  geom_point(data=MadMass,aes(x=Date,y=SC2Mass),color="aquamarine1",size=2)+
+  theme(axis.text.x = element_text(angle = 90))+
+  ggtitle("SARS-CoV-2, 24-hr Mass Loading, MMSD, (gene copies per day)")+
+  ylab("Gene copies per Day")
 
 ggplot() + 
   geom_bar(data=DataFrame, aes(fill=Site, y=PMMoVMass, x=Date),position="stack", stat="identity")+
-  geom_point(data=MadMass,aes(x=Date,y=PMMoVMass),color="blue",size=2)
+  geom_errorbar(data=MadMass,aes(x=Date,ymin = 0, ymax = PMMoVMass))+
+  geom_point(data=MadMass,aes(x=Date,y=PMMoVMass),color="aquamarine1",size=2)+
+  theme(axis.text.x = element_text(angle = 90))+
+  ggtitle("PMMoV, 24-hr Mass Loading, MMSD, (gene copies per day)")+
+  ylab("Gene copies per Day")
 ```
 >>>>>>> 5ad59eefe22bd7c11ae3bce0255dd2faf2ae2f47
