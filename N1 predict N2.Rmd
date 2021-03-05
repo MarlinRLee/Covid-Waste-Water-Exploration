@@ -143,5 +143,11 @@ water2%>%
   scale_x_log10()+
   stat_smooth(method = "lm", col = "red")+
   ylab("Residual")
-
+#3 topics:
+#conductivity: negative trend on our end or noise
+#N1->n2
+#paper: Yale says through may time shift. N1 N2 smooths lowess/loess
+#-cases is 7, hospitalization is 4 days
+#-distributed time lag serious /Bayesian framework
+#preprint non shifted
 ```

@@ -129,7 +129,7 @@ covidData = read.csv(CovidFileName)%>%
   mutate(roll=rollmean(Cases/Tests,k = 7, fill = NA))
 
 
-Model_Names=c("log(N1)","log(N1)+log(PMMoV)","log(N2)+log(N1)+log(PMMoV)","log(N2)+log(N1)+log(PMMoV)+ log(Total_Flow)","log(N2)+log(N1)+log(PMMoV)+ Total_Flow")
+Model_Names=c("a","b","c","d","f")
 
 ```
 
@@ -143,19 +143,19 @@ for(i in 1:(MaxTimeSkip/skip)) {
   M=skip*i-skip
   Inner=inner_join(covidData,ShiftData(water,M),by = c("Date","Site"))
   if (j==1){
-    LInner = lm(roll ~ log(N1), data=Inner)
+    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+Site, data=Inner)
   }
   if (j==2){
-    LInner = lm(roll ~ log(N1)+log(PMMoV), data=Inner)
+    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+log(Total_Flow)+Site, data=Inner)
   }
   if (j==3){
-    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV), data=Inner)
+    LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)++Site, data=Inner)
   }
   if (j==4){
-    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+ log(Total_Flow), data=Inner)
+    LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)+log(Total_Flow)+Site, data=Inner)
   }
   if (j==5){
-    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+ Total_Flow, data=Inner)
+    LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)+log(Total_Flow)+Site, data=Inner)
   }
   output[i,1]=M
   output[i,j+1]=summary(LInner)$r.squared
@@ -173,7 +173,7 @@ colnames(outputa)=ColNames
 #get hierarchy framework
 #10 linear models with cross interactions
 #
-
+outputa
 ```
 17         22
 waste ->   pop

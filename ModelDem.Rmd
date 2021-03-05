@@ -206,7 +206,7 @@ MergedData=left_join(covidData,water2,by = c("Date","Site"))%>%
 
 Inner=inner_join(covidData,water2,by = c("Date","Site"))%>%
     filter(Site!="UW-LakeShore",Site!="UW-Sellery")
-LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+Site, data=Inner)
+LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)+log(Total_Flow)+Site, data=Inner)
 
 
 MergedData$fittedMo=c(tail(predict.lm(LInner,MergedData,interval="none"), -ShiftedAmount), rep(NA, ShiftedAmount))
@@ -239,16 +239,14 @@ for (i in 1:length(sites)){
     #geom_point(aes(y=roll-fitted))+
     #geom_point(aes(y=roll,colour="Percent Positive"))+
     #geom_point(aes(y=fitted,colour="Model"))+
-    geom_smooth(aes(y=roll,colour="Percent Positive"))+
-    geom_smooth(aes(y=fitted,colour="Model"))+
+    geom_smooth(aes(y=Cases,colour="Percent Positive"))+
+    #geom_smooth(aes(y=fitted,colour="Model"))+
     geom_smooth(aes(y=fittedMo,colour="Model unmoved"))+
     ylab("% of Covid Tests Positive")+
-    ylim(minTest,maxTest)+
     scale_x_date(limits = c(StartFeces,EndFeces),labels = date_format("%b"))+
     ggtitle(sites[i])
 }
 annotate_figure(ggarrange(plotlist = myplots,ncol = 2, nrow = 3),top = text_grob(paste("R^2:",round(summary(LInner)$r.squared,2)), color = "red", face = "bold", size = 14))
-
 ```
 
 Points
@@ -263,15 +261,23 @@ for (i in 1:length(sites)){
   myplots[[i]]=
     ggplot(data=SiteData)+aes(x=Date)+
     #geom_point(aes(y=roll-fitted))+
-    geom_point(aes(y=roll,colour="Percent Positive"))+
-    geom_point(aes(y=fitted,colour="Model"))+
+    geom_point(aes(y=Cases,colour="Percent Positive"))+
+    #geom_point(aes(y=fitted,colour="Model"))+
     geom_point(aes(y=fittedMo,colour="Model unmoved"))+
-    ylab("% of Covid Tests Positive")+
-    ylim(minTest,maxTest)+
+    ylab("Number of cases")+
     scale_x_date(limits = c(StartFeces,EndFeces),labels = date_format("%b"))+
     ggtitle(sites[i])
 }
 #ggtitle(text_grob(sites[i], color = "red", face = "bold", size = 14))
 
 annotate_figure(ggarrange(plotlist = myplots,ncol = 2, nrow = 3),top = text_grob(paste("R^2:",round(summary(LInner)$r.squared,2)), color = "red", face = "bold", size = 14))
+
+
+# AdjustedData%>%
+#   ggplot()+aes(x=Date)+
+#   geom_point(aes(y=PMMoV))+
+#   scale_x_date(limits = c(StartFeces,EndFeces),labels = date_format("%b"))+
+#   facet_wrap(~Site)
+
+#look for 
 ```
