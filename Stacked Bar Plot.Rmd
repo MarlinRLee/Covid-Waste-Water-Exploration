@@ -1,9 +1,10 @@
 ---
 title: "Wastewater, Model Work"
-author: "`Marlin derived from work by Brian Yandell"
+author: '`Marlin derived from work by Brian Yandell'
 output:
-  word_document: default
   html_document: default
+  pdf_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -65,7 +66,7 @@ DataFrame <- read_excel(filename,trim_ws=T,col_names=TRUE)%>%
   mutate(Date=as.character(Date))
 ```
 
-```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=12}
+```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=8}
 SumInter=DataFrame%>%
   filter(Site!="MC ")%>%
   group_by(Date)%>%
@@ -74,14 +75,12 @@ MadMass=DataFrame%>%
   filter(Site=="MC ")%>%
   select(Date,SC2Mass,PMMoVMass)
 
-sumar=inner_join(SumInter,MadMass,by = c("Date"))
-
-DataFrame=DataFrame%>%
+DataFrame.NoComp=DataFrame%>%
   filter(Site!="MC ")
 
 
 ggplot() + 
-  geom_bar(data=DataFrame, aes(fill=Site, y=SC2Mass, x=Date),position="stack", stat="identity")+
+  geom_bar(data=DataFrame.NoComp, aes(fill=Site, y=SC2Mass, x=Date),position="stack", stat="identity")+
   geom_errorbar(data=MadMass,aes(x=Date,ymin = 0, ymax = SC2Mass))+
   geom_point(data=MadMass,aes(x=Date,y=SC2Mass),color="aquamarine1",size=2)+
   theme(axis.text.x = element_text(angle = 90))+
@@ -89,10 +88,227 @@ ggplot() +
   ylab("Gene copies per Day")
 
 ggplot() + 
-  geom_bar(data=DataFrame, aes(fill=Site, y=PMMoVMass, x=Date),position="stack", stat="identity")+
+  geom_bar(data=DataFrame.NoComp, aes(fill=Site, y=PMMoVMass, x=Date),position="stack", stat="identity")+
   geom_errorbar(data=MadMass,aes(x=Date,ymin = 0, ymax = PMMoVMass))+
   geom_point(data=MadMass,aes(x=Date,y=PMMoVMass),color="aquamarine1",size=2)+
   theme(axis.text.x = element_text(angle = 90))+
   ggtitle("PMMoV, 24-hr Mass Loading, MMSD, (gene copies per day)")+
   ylab("Gene copies per Day")
 ```
+
+
+```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=8}
+sumar=inner_join(SumInter,MadMass,by = c("Date"))%>%
+  mutate(CovRatio=SC2Mass/sumSC2, PMMoVRatio=PMMoVMass/sumPMMoV)%>%
+  select(Date,CovRatio,PMMoVRatio)
+
+sumar%>%
+  ggplot()+geom_histogram(aes(x=CovRatio))+
+  scale_x_log10()
+sumar%>%
+  ggplot()+geom_histogram(aes(x=PMMoVRatio))+
+  scale_x_log10()
+sumar%>%
+  ggplot()+geom_boxplot(aes(y=CovRatio))+
+  scale_y_log10()
+sumar%>%
+  ggplot()+geom_boxplot(aes(y=PMMoVRatio))+
+    scale_y_log10()
+
+
+head(sumar[order(sumar$PMMoVRatio,decreasing=T),],3)
+tail(sumar[order(sumar$PMMoVRatio,decreasing=T),],3)
+head(sumar[order(sumar$CovRatio,decreasing=T),],3)
+tail(sumar[order(sumar$CovRatio,decreasing=T),],3)
+
+
+summary(sumar$PMMoVRatio)
+summary(sumar$CovRatio)
+#CovRatio
+#2021-02-01	0.1259527
+#2020-11-09	0.1338029	
+#2020-11-30	3.4742086
+#2021-02-04	7.9350253	
+
+#PMMoVRatio
+#2020-12-15	2.95838995	
+#2020-12-22	2.66070456
+#2020-11-16	0.08833492	
+#2021-02-08	0.06070667	
+
+```
+```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=8}
+sumar%>%
+  ggplot()+aes(x=CovRatio,y=PMMoVRatio)+geom_point()
+```
+
+Analysis with old data
+
+```{r}
+filename <- "data/WW SARS-COV-2 Data V3.xlsx"
+sheets <- excel_sheets(filename)
+water_MMSD <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 9), "text"),
+                    sheet = 1) %>%
+  rename(Comment = "...12")
+water_Interceptors <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 8), "text"),
+                    sheet = 2) %>%
+  rename(Comment = "...11") %>%
+  mutate(TSS = NA,
+         Site = ifelse(Site == "MMSD P02", "MMSD P2", Site),
+         Site = ifelse(Site == "MMSD P07", "MMSD P7", Site),
+         Site = ifelse(Site == "MMSD P08", "MMSD P8", Site)) %>%
+  select(1:5, TSS, everything())
+water_UW_Dorms <- read_excel(filename,
+                    na = missing_codes,
+                    col_types = c("text", "date", rep("numeric", 9), rep("text", 1)),
+                    sheet = 3) %>%
+  rename(Comment = "...12")
+
+tmpfn <- function(N1, N2) {
+  AVG <- sqrt(N1 * N2)
+  AVG <- ifelse(is.na(N1), N2, AVG)
+  AVG <- ifelse(is.na(N2), N1, AVG)
+}
+missing_codes <- c("","NA","0","Undetected","Not Detected",
+                   "Field Parameters to be filled in", 
+                   "Inhibited-to be re-ran", "#DIV/0!")
+
+
+water <- 
+  bind_rows(water_MMSD,
+            water_Interceptors,
+            water_UW_Dorms) %>%
+  rename(Date = "Collection Date",
+         pH = "pH (SU)",
+         Total_Flow = "Total Flow (MGD)",
+         Conductivity = "Conductivity (uS/CM@25C)",
+         N1 = "N1 (GC/L)",
+         N2 = "N2 (GC/L)",
+         PMMoV = "PMMoV (GC/L)",
+         Pct_BCoV = "% Recovery (BCoV)") %>%
+  filter(!is.na(Site)) %>%
+  mutate(AVG = tmpfn(N1, N2),
+         wt = 2 - is.na(N1) - is.na(N2),
+         Site = ifelse(Site == "UW-D", "UW-LakeShore", Site),
+         Site = ifelse(Site == "UW-S", "UW-Sellery", Site))
+```
+
+```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=8}
+water.bar=water%>%
+  filter(Site!="UW-LakeShore",Site!="UW-Sellery")%>%
+  mutate(SC2Mass=3.785*1000000*AVG*Total_Flow , PMMoVMass=3.785*1000000*PMMoV*Total_Flow)%>%
+  mutate(SC2MassN1=3.785*1000000*N1*Total_Flow , SC2MassN2=3.785*1000000*N2*Total_Flow)%>%
+  mutate(Date=as.character(Date))
+
+water.NoComp=water.bar%>%
+  filter(Site!="Madison")
+
+MadMass=water.bar%>%
+  filter(Site=="Madison")%>%
+  inner_join(data.frame(Date=SumInter$Date))%>%
+  select(Date,SC2Mass,PMMoVMass,SC2MassN1,SC2MassN2)
+
+SumInter=water.bar%>%
+  filter(Site!="Madison")%>%
+  group_by(Date)%>%
+  summarize(sumPMMoV=sum(PMMoVMass),sumSC2=sum(SC2Mass),sumSC2N1=sum(SC2MassN1),sumSC2N2=sum(SC2MassN2))
+
+
+
+
+ggplot() + 
+  geom_bar(data=water.NoComp, aes(fill=Site, y=PMMoVMass, x=Date),position="stack", stat="identity")+
+  geom_errorbar(data=MadMass,aes(x=Date,ymin = 0, ymax = PMMoVMass))+
+  geom_point(data=MadMass,aes(x=Date,y=PMMoVMass),color="aquamarine1",size=2)+
+  theme(axis.text.x = element_text(angle = 90))+
+  ggtitle("PMMoV, 24-hr Mass Loading, MMSD, (gene copies per day)")+
+  ylab("Gene copies per Day")
+
+minN1=0
+maxN1=max(SumInter$sumSC2N1,na.rm=T)
+
+myplots <- list()
+myplots[[1]]=ggplot() + 
+  geom_bar(data=water.NoComp, aes(fill=Site, y=SC2Mass, x=Date),position="stack", stat="identity")+
+  geom_errorbar(data=MadMass,aes(x=Date,ymin = 0, ymax = SC2Mass))+
+  geom_point(data=MadMass,aes(x=Date,y=SC2Mass),color="aquamarine1",size=2)+
+  scale_y_continuous(limits = c(minN1,maxN1))+
+  theme(axis.text.x = element_text(angle = 90))+
+  ggtitle("SARS-CoV-2, Avg, 24-hr Mass Loading, MMSD, (gene copies per day)")+
+  ylab("Gene copies per Day")
+
+myplots[[2]]=ggplot() + 
+  geom_bar(data=water.NoComp, aes(fill=Site, y=SC2MassN1, x=Date),position="stack", stat="identity")+
+  geom_errorbar(data=MadMass,aes(x=Date,ymin = 0, ymax = SC2MassN1))+
+  geom_point(data=MadMass,aes(x=Date,y=SC2MassN1),color="aquamarine1",size=2)+
+  scale_y_continuous(limits = c(minN1,maxN1))+
+  theme(axis.text.x = element_text(angle = 90))+
+  ggtitle("SARS-CoV-2, N1, 24-hr Mass Loading, MMSD")+
+  ylab("Gene copies per Day")
+
+myplots[[3]]=ggplot() + 
+  geom_bar(data=water.NoComp, aes(fill=Site, y=SC2MassN2, x=Date),position="stack", stat="identity")+
+  geom_errorbar(data=MadMass,aes(x=Date,ymin = 0, ymax = SC2MassN2))+
+  geom_point(data=MadMass,aes(x=Date,y=SC2MassN2),color="aquamarine1",size=2)+
+  scale_y_continuous(limits = c(minN1,maxN1))+
+  theme(axis.text.x = element_text(angle = 90))+
+  ggtitle("SARS-CoV-2,N2, 24-hr Mass Loading, MMSD")+
+  ylab("Gene copies per Day")
+ggarrange(plotlist = myplots)
+```
+
+```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=8}
+SumInter=water.bar%>%
+  filter(Site!="Madison")%>%
+  group_by(Date)%>%
+  summarize(sumPMMoV=sum(PMMoVMass),sumSC2=sum(SC2Mass),sumSC2N1=sum(SC2MassN1),sumSC2N2=sum(SC2MassN2))
+
+sumar1=inner_join(SumInter,MadMass,by = c("Date"))%>%
+  mutate(CovRatio=SC2Mass/sumSC2, CovRatioN1=SC2MassN1/sumSC2N1,CovRatioN2=SC2MassN2/sumSC2N2)%>%
+  select(Date,CovRatio,CovRatioN1,CovRatioN2)
+
+
+head(sumar1[order(sumar1$CovRatio,decreasing=T),],3)%>%
+  select(Date,CovRatio)
+tail(sumar1[order(sumar1$CovRatio,decreasing=T),],3)%>%
+  select(Date,CovRatio)
+head(sumar1[order(sumar1$CovRatioN1,decreasing=T),],3)%>%
+  select(Date,CovRatioN1)
+tail(sumar1[order(sumar1$CovRatioN1,decreasing=T),],3)%>%
+  select(Date,CovRatioN1)
+
+sumar1[order(sumar1$CovRatioN2,decreasing=T),]%>%
+  filter(!is.na(CovRatioN2))%>%
+  head(3)%>%
+  select(Date,CovRatioN2)
+sumar1[order(sumar1$CovRatioN2,decreasing=T),]%>%
+  filter(!is.na(CovRatioN2))%>%
+  tail(3)%>%
+  select(Date,CovRatioN2)
+
+
+summary(sumar1$CovRatio)
+summary(sumar1$CovRatioN1)
+summary(sumar1$CovRatioN2)
+#CovRatio
+#2021-02-01	0.1259527
+#2020-11-09	0.1338029	
+#2020-11-30	3.4742086
+#2021-02-04	7.9350253	
+
+#PMMoVRatio
+#2020-12-15	2.95838995	
+#2020-12-22	2.66070456
+#2020-11-16	0.08833492	
+#2021-02-08	0.06070667	
+
+```
+```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=8}
+sumar%>%
+  ggplot()+aes(x=CovRatio,y=PMMoVRatio)+geom_point()
+```
+
