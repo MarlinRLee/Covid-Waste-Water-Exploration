@@ -49,6 +49,7 @@ kprint <- function(...) {
 ```
 
 ```{r}
+<<<<<<< HEAD
 
 source("./DataProccess.R")
 
@@ -59,6 +60,17 @@ water=WasteWater(Waterfilename)
 covidData=CovidData(CovidFileName)
 ```
 
+=======
+
+source("./DataProccess.R")
+
+
+Waterfilename <- "data/WW SARS-COV-2 Data V3.xlsx"
+CovidFileName = "data/covid.csv"
+water=WasteWater(Waterfilename)
+covidData=CovidData(CovidFileName)
+```
+>>>>>>> 665ca92f78035075543661a285cabd5d8710f6b7
 
 TSS (mg/L):represents the TSS data in the Dorms. Correlates with Pct_BCoV.
 
