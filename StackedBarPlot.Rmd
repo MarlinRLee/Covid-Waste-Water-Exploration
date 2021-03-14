@@ -44,7 +44,7 @@ kprint <- function(...) {
 ```
 
 ```{r 2}
-filename <- "data/Interceptor_MassBalance_Analysis_02232021.xlsx"
+filename <- "../data/Interceptor_MassBalance_Analysis_02232021.xlsx"
 ```
 
 ```{r warning = FALSE, message = FALSE}
