@@ -65,12 +65,7 @@ covidData=CovidData(CovidFileName)
 
 ```{r}
 ####Fills in missing n2 values
-N2Fixer = lm(N2~N1, data=water)
-water$temp=predict.lm(N2Fixer,water,interval="none")
-water=water%>%
-  mutate(N2=ifelse(is.na(N2),temp,N2))
-water=water%>%
-  select(-temp)
+water=N2Fixer(water)
 ###
 
 
@@ -87,7 +82,7 @@ Model_Names=c("a","b","c","d","f")
 ```
 
 ```{r}
-MaxTimeSkip=20
+MaxTimeSkip=10
 cols=length(Model_Names)
 skip=1
 output = matrix(ncol=cols+1, nrow=MaxTimeSkip/skip)
@@ -96,19 +91,19 @@ for(i in 1:(MaxTimeSkip/skip)) {
   M=skip*i-skip
   Inner=inner_join(covidData,ShiftData(water,M),by = c("Date","Site"))
   if (j==1){
-    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+Site, data=Inner)
+    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV), data=Inner)
   }
   if (j==2){
-    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+log(Total_Flow)+Site, data=Inner)
+    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+log(Total_Flow), data=Inner)
   }
   if (j==3){
-    LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)++Site, data=Inner)
+    LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV), data=Inner)
   }
   if (j==4){
-    LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)+log(Total_Flow)+Site, data=Inner)
+    LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)+log(Pct_BCoV), data=Inner)
   }
   if (j==5){
-    LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)+log(Total_Flow)+Site, data=Inner)
+    LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)+log(Pct_BCoV)+log(Total_Flow), data=Inner)
   }
   output[i,1]=M
   output[i,j+1]=summary(LInner)$r.squared
@@ -126,7 +121,13 @@ colnames(outputa)=ColNames
 #get hierarchy framework
 #10 linear models with cross interactions
 #
-outputa
+
+
+outputa%>%
+  pivot_longer("a":"f",names_to = "names")%>%
+  group_by(names)%>%
+  summarize(max=max(value))
+
 ```
 17         22
 waste ->   pop

@@ -14,8 +14,8 @@ library(ggformula)
 library(ggpubr)
 
 
-
 #Creates WastewaterData
+
 tmpfn <- function(N1, N2) {
   AVG <- sqrt(N1 * N2)
   AVG <- ifelse(is.na(N1), N2, AVG)
@@ -63,19 +63,40 @@ WasteWater = function(filename){
     mutate(AVG = tmpfn(N1, N2),
            wt = 2 - is.na(N1) - is.na(N2),
            Site = ifelse(Site == "UW-D", "UW-LakeShore", Site),
-           Site = ifelse(Site == "UW-S", "UW-Sellery", Site))
+           Site = ifelse(Site == "UW-S", "UW-Sellery", Site),
+           TSS = ifelse(is.na(TSS), `TSS (mg/L)`, TSS))%>%
+    select(-`TSS (mg/L)`)
   return(water)
 }
+
 #Creates  CovidNumberData
 
 CovidData = function(CovidFileName){
   lag=7
   covidData = read.csv(CovidFileName)%>%
-    mutate(ServiceID = ifelse(ServiceID=="MMSD","Madison",paste("MMSD P",ServiceID,sep="")),Date = as.Date(Date , format = "%m/%d/%y"))%>%
+    mutate(ServiceID = ifelse(ServiceID=="MMSD","Madison",paste("MMSD P",ServiceID,sep="")),Date = as.Date(Date))%>%
     rename(Site=ServiceID)%>%
     group_by(Site)%>%
-    mutate(Cases=Cases - 0*lag(Cases, n=lag,default = NA),Tests=Tests- 0*lag(Tests, n=lag,default = NA))%>%
+    mutate(Cases=Cases - lag(Cases, n=lag,default = NA),Tests=Tests- lag(Tests, n=lag,default = NA))%>%
     mutate(roll=Cases/Tests)
   return(covidData)
+}
+N2Fixer = function(data){
+  N2Mod = lm(N2~N1, data=data)
+  data$temp=predict.lm(N2Mod,data,interval="none")
+  data=data%>%
+    mutate(N2=ifelse(is.na(N2),temp,N2))
+  data=data%>%
+    select(-temp)
+  return(data)
+}
+N1Fixer = function(data){
+  N1Mod = lm(N1~N2, data=data)
+  data$temp=predict.lm(N1Mod,data,interval="none")
+  data=data%>%
+    mutate(N2=ifelse(is.na(N2),temp,N2))
+  data=data%>%
+    select(-temp)
+  return(data)
 }
 

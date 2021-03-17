@@ -74,13 +74,9 @@ Curves
 ```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=12}
 
 ####Fills in missing n2 values
-N2Fixer = lm(N2~N1, data=water)
-water$temp=predict.lm(N2Fixer,water,interval="none")
-water=water%>%
-  mutate(N2=ifelse(is.na(N2),temp,N2))
-water=water%>%
-  select(-temp)
+water=N2Fixer(water)
 ###
+
 
 
 #Moves the waterwaste data to match up trends
@@ -99,7 +95,7 @@ MergedData=left_join(covidData,water2,by = c("Date","Site"))%>%
 
 Inner=inner_join(covidData,water2,by = c("Date","Site"))%>%
     filter(Site!="UW-LakeShore",Site!="UW-Sellery")
-LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+log(Total_Flow)+Site, data=Inner)
+LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)+log(Pct_BCoV)+log(Total_Flow), data=Inner)
 
 
 MergedData$fittedMo=c(tail(predict.lm(LInner,MergedData,interval="none"), -ShiftedAmount), rep(NA, ShiftedAmount))
@@ -129,11 +125,7 @@ for (i in 1:length(sites)){
     filter(Site==sites[i])
   myplots[[i]]=
     ggplot(data=SiteData)+aes(x=Date)+
-    #geom_point(aes(y=roll-fitted))+
-    #geom_point(aes(y=roll,colour="Percent Positive"))+
-    #geom_point(aes(y=fitted,colour="Model"))+
-    geom_smooth(aes(y=roll,colour="Percent Positive"))+
-    #geom_smooth(aes(y=fitted,colour="Model"))+
+    geom_smooth(aes(y=Cases,colour="Percent Positive"))+
     geom_smooth(aes(y=fittedMo,colour="Model unmoved"))+
     ylab("% of Covid Tests Positive")+
     #scale_x_date(limits = c(StartFeces,EndFeces),labels = date_format("%b"))+
@@ -141,11 +133,25 @@ for (i in 1:length(sites)){
 }
 annotate_figure(ggarrange(plotlist = myplots,ncol = 2, nrow = 3),top = text_grob(paste("R^2:",round(summary(LInner)$r.squared,2)), color = "red", face = "bold", size = 14))
 
-ggplot(data=AdjustedData)+aes(x=Date,color=Site)+geom_point(aes(y=roll))+geom_point(aes(y=fittedMo),shape=2)+ylab("% of Covid Tests Positive")
+ggplot(data=AdjustedData)+aes(x=Date,color=Site)+geom_point(aes(y=Cases))+geom_point(aes(y=fittedMo),shape=2)+ylab("% of Covid Tests Positive")
 
 
 
-ggplot(data=AdjustedData)+aes(x=Date)+geom_smooth(aes(y=roll))+geom_smooth(aes(y=fittedMo),shape=2)+ylab("% of Covid Tests Positive")
+ggplot(data=AdjustedData)+aes(x=Date)+geom_smooth(aes(y=Cases))+geom_smooth(aes(y=fittedMo),shape=2)+ylab("% of Covid Tests Positive")
+
+
+
+
+ggplot(data=AdjustedData)+aes(x=Date)+
+geom_smooth(aes(y=log(N2)+log(N1)-log(PMMoV)-log(Pct_BCoV)-log(Total_Flow)))+
+ylab("% of Covid Tests Positive")+
+  facet_wrap(~Site)
+
+
+ggplot(data=AdjustedData)+aes(x=Date)+
+geom_smooth(aes(y=Cases))+
+ylab("% of Covid Tests Positive")+
+  facet_wrap(~Site)
 ```
 
 Points

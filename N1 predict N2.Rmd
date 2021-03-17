@@ -85,12 +85,14 @@ water%>%
 
 ```{r, echo=FALSE, dpi=600, fig.width=8, fig.height=8}
 ####Fills in missing n2 values
-N2Fixer = lm(N2~N1, data=water)
-water$temp=predict.lm(N2Fixer,water,interval="none")
+N1Mod = lm(N1~N2, data=water)
+water$temp=predict.lm(N1Mod,water,interval="none")
 water2=water%>%
   mutate(N2=ifelse(is.na(N2),temp,N2))
+water2=water2%>%
+  select(-temp)
 ###
-summary(N2Fixer)
+summary(N1Mod)
 ```
 
 ```{r, echo=FALSE, dpi=600, fig.width=8, fig.height=8}
@@ -106,6 +108,7 @@ water2%>%
   scale_x_log10()+
   stat_smooth(method = "lm", col = "red")+
   ylab("Residual")
+
 #3 topics:
 #conductivity: negative trend on our end or noise
 #N1->n2
