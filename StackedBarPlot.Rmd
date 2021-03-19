@@ -114,14 +114,7 @@ sumar%>%
     scale_y_log10()
 
 
-head(sumar[order(sumar$PMMoVRatio,decreasing=T),],3)
-tail(sumar[order(sumar$PMMoVRatio,decreasing=T),],3)
-head(sumar[order(sumar$CovRatio,decreasing=T),],3)
-tail(sumar[order(sumar$CovRatio,decreasing=T),],3)
 
-
-summary(sumar$PMMoVRatio)
-summary(sumar$CovRatio)
 #CovRatio
 #2021-02-01	0.1259527
 #2020-11-09	0.1338029	
@@ -135,10 +128,7 @@ summary(sumar$CovRatio)
 #2021-02-08	0.06070667	
 
 ```
-```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=8}
-sumar%>%
-  ggplot()+aes(x=CovRatio,y=PMMoVRatio)+geom_point()
-```
+
 
 Analysis with old data
 
@@ -147,7 +137,7 @@ Analysis with old data
 source("./DataProccess.R")
 
 
-Waterfilename <- "data/WW SARS-COV-2 Data V3.xlsx"
+Waterfilename <- "../data/WW SARS-COV-2 Data V5.xlsx"
 water=WasteWater(Waterfilename)
   
 ```
@@ -174,7 +164,6 @@ SumInter=water.bar%>%
 
 
 
-
 ggplot() + 
   geom_bar(data=water.NoComp, aes(fill=Site, y=PMMoVMass, x=Date),position="stack", stat="identity")+
   geom_errorbar(data=MadMass,aes(x=Date,ymin = 0, ymax = PMMoVMass))+
@@ -184,7 +173,7 @@ ggplot() +
   ylab("Gene copies per Day")
 
 minN1=0
-maxN1=max(c(SumInter$sumSC2N1,na.rm=T,MadMass$SC2MassN1,na.rm=T))
+maxN1=max(c(SumInter$sumSC2N1,MadMass$SC2MassN1),na.rm=T)
 
 myplots <- list()
 myplots[[1]]=ggplot() + 
@@ -214,7 +203,7 @@ myplots[[3]]=ggplot() +
   ggtitle("SARS-CoV-2,N2, 24-hr Mass Loading, MMSD")+
   ylab("Gene copies per Day")
 ggarrange(plotlist = myplots)
-water
+
 #11-20 missing
 #comp is everyday, interceptors are every two day, how? Look at only mad?
 #20-25% have inconsistency, down to 10% when fit NA
@@ -229,34 +218,7 @@ SumInter=water.bar%>%
   group_by(Date)%>%
   summarize(sumPMMoV=sum(PMMoVMass),sumSC2=sum(SC2Mass),sumSC2N1=sum(SC2MassN1),sumSC2N2=sum(SC2MassN2))
 
-sumar1=inner_join(SumInter,MadMass,by = c("Date"))%>%
-  mutate(CovRatio=SC2Mass/sumSC2, CovRatioN1=SC2MassN1/sumSC2N1,CovRatioN2=SC2MassN2/sumSC2N2)%>%
-  mutate(Date=as.Date(Date))%>%
-  select(Date,CovRatio,CovRatioN1,CovRatioN2)
 
-
-head(sumar1[order(sumar1$CovRatio,decreasing=T),],3)%>%
-  select(Date,CovRatio)
-tail(sumar1[order(sumar1$CovRatio,decreasing=T),],3)%>%
-  select(Date,CovRatio)
-head(sumar1[order(sumar1$CovRatioN1,decreasing=T),],3)%>%
-  select(Date,CovRatioN1)
-tail(sumar1[order(sumar1$CovRatioN1,decreasing=T),],3)%>%
-  select(Date,CovRatioN1)
-
-sumar1[order(sumar1$CovRatioN2,decreasing=T),]%>%
-  filter(!is.na(CovRatioN2))%>%
-  head(3)%>%
-  select(Date,CovRatioN2)
-sumar1[order(sumar1$CovRatioN2,decreasing=T),]%>%
-  filter(!is.na(CovRatioN2))%>%
-  tail(3)%>%
-  select(Date,CovRatioN2)
-
-
-summary(sumar1$CovRatio)
-summary(sumar1$CovRatioN1)
-summary(sumar1$CovRatioN2)
 #CovRatio
 #2021-02-01	0.1259527
 #2020-11-09	0.1338029	
@@ -273,15 +235,18 @@ summary(sumar1$CovRatioN2)
 
 
 ```{r}
-water.rat=inner_join(sumar1,water,by = c("Date"))
+sumarWater=inner_join(SumInter,MadMass,by = c("Date"))%>%
+  mutate(CovRatio=SC2Mass/sumSC2, PMMoVRatio=PMMoVMass/sumPMMoV)%>%
+  select(Date,CovRatio,PMMoVRatio)
 
 
-water.rat%>%
-  ggplot()+aes(x=CovRatio,y=Conductivity)%>%
-  geom_point()
+WeirdDatesData=full_join(sumar,sumarWater,by=c("Date"))%>%
+  mutate(CovRatioDif=CovRatio.x/CovRatio.y)%>%
+  mutate(PMMoVDif=PMMoVRatio.x/PMMoVRatio.y)%>%
+  filter(abs(PMMoVDif-1)>.5 | abs(CovRatioDif-1)>.5)%>%
+  select(-CovRatio.x,-CovRatio.y,-PMMoVRatio.x,-PMMoVRatio.y)
+WeirdDates=WeirdDatesData$Date
 
-water.rat%>%
-  ggplot()+aes(x=CovRatioN1,y=CovRatioN2,color=CovRatio)%>%
-  geom_point()
+
+WeirdDatesData
 ```
-
