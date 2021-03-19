@@ -23,34 +23,46 @@ tmpfn <- function(N1, N2) {
 }
 WasteWater = function(filename){
   
+  tmpfn <- function(N1, N2) {
+    AVG <- sqrt(N1 * N2)
+    AVG <- ifelse(is.na(N1), N2, AVG)
+    AVG <- ifelse(is.na(N2), N1, AVG)
+  }
+  
   missing_codes <- c("","NA","0","Undetected","Not Detected",
                      "Field Parameters to be filled in", 
                      "Inhibited-to be re-ran", "#DIV/0!")
-  sheets <- excel_sheets(filename)
-  water_MMSD <- read_excel(filename,
-                      na = missing_codes,
-                      col_types = c("text", "date", rep("numeric", 9), "text"),
-                      sheet = 1) %>%
-    rename(Comment = "...12")
-  water_Interceptors <- read_excel(filename,
-                      na = missing_codes,
-                      col_types = c("text", "date", rep("numeric", 8), "text"),
-                      sheet = 2) %>%
-    rename(Comment = "...11") %>%
+  sheets <- excel_sheets(Waterfilename)
+  water_MMSD <- read_excel(Waterfilename,
+                           na = missing_codes,
+                           col_types = c("text", "date", rep("numeric", 14)),
+                           sheet = 1)%>%
+    select(-c(13:16))
+  water_Interceptors <- read_excel(Waterfilename,
+                                   na = missing_codes,
+                                   col_types = c("text", "date", rep("numeric", 8), "text"),
+                                   sheet = 2) %>%
+    select(-"...11") %>%
     mutate(TSS = NA,
            Site = ifelse(Site == "MMSD P02", "MMSD P2", Site),
            Site = ifelse(Site == "MMSD P07", "MMSD P7", Site),
            Site = ifelse(Site == "MMSD P08", "MMSD P8", Site)) %>%
     select(1:5, TSS, everything())
-  water_UW_Dorms <- read_excel(filename,
-                      na = missing_codes,
-                      col_types = c("text", "date", rep("numeric", 9), rep("text", 1)),
-                      sheet = 3) %>%
-    rename(Comment = "...12")
+  water_UW_Dorms <- read_excel(Waterfilename,
+                               na = missing_codes,
+                               col_types = c("text", "date", rep("numeric", 9), rep("text", 1)),
+                               sheet = 3) %>%
+    select(-"...12")
+  water_UW_sellery <- read_excel(Waterfilename,
+                                 na = missing_codes,
+                                 col_types = c("text", "date", rep("numeric", 9), rep("text", 1)),
+                                 sheet = 4) %>%
+    select(-"...12")
   water <- 
     bind_rows(water_MMSD,
               water_Interceptors,
-              water_UW_Dorms) %>%
+              water_UW_Dorms,
+              water_UW_sellery) %>%
     rename(Date = "Collection Date",
            pH = "pH (SU)",
            Total_Flow = "Total Flow (MGD)",
@@ -64,9 +76,9 @@ WasteWater = function(filename){
            wt = 2 - is.na(N1) - is.na(N2),
            Site = ifelse(Site == "UW-D", "UW-LakeShore", Site),
            Site = ifelse(Site == "UW-S", "UW-Sellery", Site),
-           TSS = ifelse(is.na(TSS), `TSS (mg/L)`, TSS))%>%
+           TSS = ifelse(is.na(TSS), `TSS (mg/L)`, TSS),
+           Date=as.Date(Date))%>%
     select(-`TSS (mg/L)`)
-  return(water)
 }
 
 #Creates  CovidNumberData
@@ -82,8 +94,8 @@ CovidData = function(CovidFileName){
   return(covidData)
 }
 N2Fixer = function(data){
-  N2Mod = lm(N2~N1, data=data)
-  data$temp=predict.lm(N2Mod,data,interval="none")
+  N2Mod = lm(log(N2)~log(N1), data=data)
+  data$temp=10^predict.lm(N2Mod,data,interval="none")
   data=data%>%
     mutate(N2=ifelse(is.na(N2),temp,N2))
   data=data%>%
@@ -99,4 +111,3 @@ N1Fixer = function(data){
     select(-temp)
   return(data)
 }
-
