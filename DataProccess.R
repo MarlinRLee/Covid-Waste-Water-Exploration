@@ -12,7 +12,7 @@ library(zoo)
 library(RcppRoll)
 library(ggformula)
 library(ggpubr)
-
+library(lubridate)
 
 #Creates WastewaterData
 
@@ -110,4 +110,25 @@ N1Fixer = function(data){
   data=data%>%
     select(-temp)
   return(data)
+}
+HFGInfo = function(data){
+  missing_codes <- c("","NA","0","Undetected","Not Detected",
+                     "Field Parameters to be filled in", 
+                     "Inhibited-to be re-ran", "#DIV/0!",
+                     "Undetermined", "LA")
+  
+  HFGInfo.PreHack <- read_excel(data,
+                                na = missing_codes,
+                                col_types = c("text","text", "date", rep("numeric", 4),"text",rep("numeric", 2),"text",rep("numeric", 3)),
+                                sheet = 1)%>%
+    rename(repName="...2",Date="Collection Date",N1Ct="N1 CT",N1GC="N1 GC/L",N1LOD="N1 <LOD",N2Ct="N2 CT",N2GC="N2 GC/L",N2LOD="N2 <LOD",PMMOVCT="PMMOV CT",PMMOVGC="PMMOV GC/L",BCoV="BCoV% recovery")%>%
+    mutate(N1LOD=N1LOD=="Y",
+           N2LOD=N2LOD=="Y",
+           Date=as.Date(Date))
+  
+  #hack fixing inconstancy
+  HFGInfo = HFGInfo.PreHack%>%
+    mutate(Date=if_else(repName=="Platteville (T) rep 3"&Date==as.Date("2021-02-03"),as.Date("2021-02-02"),Date))%>%
+    mutate(Date=if_else(repName=="Hudson (T) rep 1"&Date==as.Date("2021-02-01"),as.Date("2021-02-02"),Date))
+  return(HFGInfo)
 }

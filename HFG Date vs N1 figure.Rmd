@@ -1,0 +1,28 @@
+
+
+
+
+```{r warning = FALSE, message = FALSE}
+library(tidyverse)
+library(readxl)
+library(broom)
+library(zoo)
+library(RcppRoll)
+library(ggformula)
+library(ggpubr)
+library(lubridate)
+
+
+source("./DataProccess.R")
+
+HFGData="../data/HFG data for stats preliminary 3-18-21.xlsx"
+
+HFGFrame=HFGInfo(HFGData)%>%
+  mutate("Filter Rep"=as.character(`Filter Rep`))
+```
+
+```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=8}
+HFGFrame%>%
+  filter(N1GC<100000000)%>%
+  ggplot()+aes(x=Date,y=N1GC,color=`Filter Rep`)+geom_point()+facet_wrap(~Plant,scales="free")+geom_jitter()
+```
