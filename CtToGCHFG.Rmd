@@ -1,0 +1,40 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r warning = FALSE, message = FALSE,echo = FALSE}
+library(tidyverse)
+library(readxl)
+library(broom)
+library(zoo)
+library(RcppRoll)
+library(ggformula)
+library(ggpubr)
+library(lubridate)
+
+
+source("./DataProccess.R")
+
+HFGData="../data/HFG data for stats preliminary 3-18-21.xlsx"
+
+HFGFrame=HFGInfo(HFGData)%>%
+  mutate("Filter Rep"=as.character(`Filter Rep`),`Well Rep`=as.character(`Well Rep`))%>%
+  filter(!is.na(N1Ct))
+```
+
+
+
+```{r}
+HFGFrame%>%
+  ggplot()+
+  aes(x=N1Ct,y=N1GC)+
+  geom_point()
+
+HFGFrame%>%
+  ggplot()+
+  aes(x=N1Ct,y=N1GC,color=Plant)+
+  geom_point()+
+  scale_y_log10()
+
+```
