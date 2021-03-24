@@ -1,8 +1,13 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
 
 
 
 
-```{r warning = FALSE, message = FALSE}
+```{r warning = FALSE, message = FALSE,echo = FALSE}
 library(tidyverse)
 library(readxl)
 library(broom)
@@ -18,11 +23,37 @@ source("./DataProccess.R")
 HFGData="../data/HFG data for stats preliminary 3-18-21.xlsx"
 
 HFGFrame=HFGInfo(HFGData)%>%
-  mutate("Filter Rep"=as.character(`Filter Rep`))
+  mutate("Filter Rep"=as.character(`Filter Rep`),`Well Rep`=as.character(`Well Rep`))
 ```
 
-```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=8}
-HFGFrame%>%
-  filter(N1GC<100000000)%>%
-  ggplot()+aes(x=Date,y=N1GC,color=`Filter Rep`)+geom_point()+facet_wrap(~Plant,scales="free")+geom_jitter()
+```{r, warning=FALSE,message = FALSE, dpi=600, fig.width=16, fig.height=6,echo = FALSE}
+HFGFrame.mean=HFGFrame%>%
+  ungroup()%>%
+  group_by(Date,`Filter Rep`,Plant)%>%
+  summarise(N1GC=mean(N1GC))%>%
+  ungroup()%>%
+  filter(N1GC<10000000)
+
+
+HFGFrame.Filtered=HFGFrame%>%
+  filter(N1GC<100000000)
+  
+
+
+
+
+Plants=unique(HFGFrame.Filtered$Plant)
+
+myplots <- list()
+for (i in 1:length(Plants)){
+  filtered.Filt=HFGFrame.Filtered%>%
+    filter(Plant==Plants[i])
+  filtered.mean=HFGFrame.mean%>%
+    filter(Plant==Plants[i])
+  graph=ggplot()+
+  geom_jitter(data=filtered.Filt,aes(x=Date, y=N1GC , color=`Filter Rep`),size=1,
+    position = position_jitter(width = .1, height = 0))#+
+  #geom_smooth(data=filtered.mean,aes(x=Date,y=N1GC, color=`Filter Rep`),se=F)
+  print(graph)
+}
 ```
