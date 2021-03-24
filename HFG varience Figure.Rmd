@@ -1,0 +1,108 @@
+---
+title: "HFG varience analysis"
+author: "Marlin"
+date: "3/23/2021"
+output: html_document
+---
+
+```{r warning = FALSE, message = FALSE,echo = FALSE}
+library(tidyverse)
+library(readxl)
+library(broom)
+library(zoo)
+library(RcppRoll)
+library(ggformula)
+library(ggpubr)
+library(lubridate)
+
+
+source("./DataProccess.R")
+
+HFGData="../data/HFG data for stats preliminary 3-18-21.xlsx"
+
+HFGFrame=HFGInfo(HFGData)%>%
+  mutate("Filter Rep"=as.character(`Filter Rep`),`Well Rep`=as.character(`Well Rep`))%>%
+  filter(!is.na(N1Ct))
+```
+
+```{r warning = FALSE,echo = FALSE}
+DifSq= function(vector){
+  mean=mean(vector)
+  return(sum((vector-mean)^2))
+}
+
+
+PlantLevelAna <- list()
+DateLevelAna <- list()
+FilterLevelAna <- list()
+
+PlantLevelAnaCt <- list()
+DateLevelAnaCt <- list()
+FilterLevelAnaCt <- list()
+a=0
+b=0
+Plants=unique(HFGFrame$Plant)
+for (i in 1:length(Plants)){
+  PlantsLevel=HFGFrame%>%
+    filter(Plant==Plants[i])
+  PlantLevelAna[i]=DifSq(PlantsLevel$N1GC)
+  PlantLevelAnaCt[i]=DifSq(PlantsLevel$N1Ct)
+  
+  Dates=unique(PlantsLevel$Date)
+  for (j in 1:length(Dates)){
+    DatesLevel=PlantsLevel%>%
+      filter(Date==Date[j])
+    a=a+1
+    DateLevelAna[a]=DifSq(DatesLevel$N1GC)
+    DateLevelAnaCt[a]=DifSq(DatesLevel$N1Ct)
+    
+    Filters =unique(DatesLevel$`Filter Rep`)
+    for (k in 1:length(Filters)){
+      FiltersLevel=DatesLevel%>%
+        filter(`Filter Rep`==Filters[k])
+      b=b+1
+      FilterLevelAna[b]=DifSq(FiltersLevel$N1GC)
+      FilterLevelAnaCt[b]=DifSq(FiltersLevel$N1Ct)
+    }
+  }
+}
+PlantLevelAna <- unlist(PlantLevelAna)
+DateLevelAna <- unlist(DateLevelAna)
+FilterLevelAna <- unlist(FilterLevelAna)
+PlantLevelAnaCt <- unlist(PlantLevelAnaCt)
+DateLevelAnaCt <- unlist(DateLevelAnaCt)
+FilterLevelAnaCt <- unlist(FilterLevelAnaCt)
+
+observations=length(HFGFrame$N1Ct)
+
+GroupVar = function(Vector){
+  return(sum(Vector)/(observations-length(Vector)))
+}
+
+meanGC=mean(HFGFrame$N1GC)
+
+
+
+Tvar=GroupVar(DifSq(HFGFrame$N1GC))
+Pvar=GroupVar(PlantLevelAna)
+Dvar=GroupVar(DateLevelAna)
+Fvar=GroupVar(FilterLevelAna)
+
+GCvar=c(Tvar,Pvar,Dvar,Fvar)
+
+meanCt=mean(HFGFrame$N1Ct)
+
+TvarCt=GroupVar(DifSq(HFGFrame$N1Ct))
+PvarCt=GroupVar(PlantLevelAnaCt)
+DvarCt=GroupVar(DateLevelAnaCt)
+FvarCt=GroupVar(FilterLevelAnaCt)
+
+Ctvar=c(TvarCt,PvarCt,DvarCt,FvarCt)
+
+
+DF=data.frame(GC=GCvar,Ct=Ctvar)
+row.names(DF) <- c("Normal Varience","Var by plant","var by date","var by filter")
+
+DF%>%
+  mutate(GCAjusted=GC/meanGC^2,CtAjusted=Ct/meanCt^2)
+```
