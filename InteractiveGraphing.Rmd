@@ -1,0 +1,194 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(ggplot2)
+library(plotly)
+library(shiny)
+library(dplyr)
+source("./DataProccess.R")
+
+
+HFGData="../data/HFG data for stats preliminary 3-18-21.xlsx"
+
+HFGFrame=HFGInfo(HFGData)%>%
+  mutate("Filter Rep"=as.character(`Filter Rep`),`Well Rep`=as.character(`Well Rep`))
+HFGFrame.mean=HFGFrame%>%
+  ungroup()%>%
+  group_by(Date,`Filter Rep`,Plant)%>%
+  summarise(N1GC=mean(N1GC))%>%
+  ungroup()%>%
+  filter(N1GC<10000000)
+
+
+HFGFrame.Filtered=HFGFrame%>%
+  filter(N1GC<100000000)%>%
+  filter(!is.na(N1GC),!is.na(Date))
+
+
+HFGDFrame=HFGFrame.Filtered
+
+p=ggplot()+
+geom_jitter(data=HFGDFrame,aes(x=Date, y=N1GC , color=`Filter Rep`,text=Plant),size=1, position = position_jitter(width = .1, height = 0))+
+  geom_smooth(data=HFGFrame.mean,aes(x=Date,y=N1GC, color=`Filter Rep`),se=F)
+
+
+ggplotly(p,tooltip = c("text", "size"))
+```
+
+
+```{r}
+Jitter_POSIXlt = function (x, factor = 1, amount = 86400/4) 
+{
+    if (length(x) == 0L) 
+        return(x)
+    if (!is.POSIXlt(x)) 
+        stop("'x' must be Date")
+    x + stats::runif(length(x), -amount, amount)
+}
+
+
+
+
+#Data needs to be sorted by category being filtered
+HFGDFrame2 <- HFGDFrame[order(HFGDFrame$`Filter Rep`), ]
+
+Plants=unique(HFGDFrame$Plant)
+
+button = list()
+button[[1]] = list(method = "restyle",
+               args = list("transforms[0].value", unique(HFGDFrame$Plant)),
+               label = unique("All"))
+
+
+for (i in 2:length(Plants)){
+  button[[i]]=list(method = "restyle",
+               args = list("transforms[0].value", unique(HFGDFrame$Plant)[i]),
+               label = unique(HFGDFrame$Plant)[i])
+}
+fig <-HFGDFrame%>%
+  plot_ly(
+  x = Jitter_POSIXlt(as.POSIXlt(HFGDFrame$Date)),
+  text = ~`Plant`,
+  hoverinfo = 'text',
+  transforms = list(
+      list(
+        type = 'filter',
+        target = HFGDFrame2$Plant,
+        operation = 'in',
+        value = unique(HFGDFrame$Plant)[1]
+      )
+    )
+)%>%
+   add_trace(type = 'scatter',
+              y = ~N1GC,
+             color = ~`Filter Rep`,
+             mode = 'markers') %>%
+  add_lines(y = fitted(loess(N1GC ~ as.numeric(Date),data=HFGDFrame)),
+            line = list(color = '#07A4B5'))%>%
+  layout(
+    updatemenus = list(
+      list(
+        type = 'dropdown',
+        active = 0,
+        buttons = button
+      )
+    )
+  )
+fig
+
+```
+
+```{r}
+ui <- fluidPage(
+  titlePanel("Dashboard"),
+  
+  # Sidebar with a slider input for number of bins 
+  sidebarLayout(
+    sidebarPanel(
+      selectInput(inputId = "Plant", label = ("Plant"),
+                  choices = unique(HFGDFrame$Plant)
+      )
+    ),
+    mainPanel(plotOutput("plot2"))
+  )
+)
+
+
+# Define server logic required to draw a histogram
+server <- function(input, output) {
+  filtered_data<- reactive({
+    filter(HFGDFrame, HFGDFrame$Plant==input$Plant)})
+  output$plot2<-renderPlot({
+    ggplot(data=filtered_data(),aes(x=Date,y=N1GC,color=`Filter Rep`))+geom_point()+geom_smooth(se=F)},height = 400,width = 600)
+}
+
+shinyApp(ui = ui, server = server)
+```
+```{r}
+Waterfilename <- "../data/WW SARS-COV-2 Data V5.xlsx"
+CovidFileName = "../data/MMSD_Cases.csv"
+source("./DataProccess.R")
+library(janitor)
+water=WasteWater(Waterfilename)
+
+water_HackJob=water%>%
+  filter(str_count(Date,"\\.")==0)%>%
+  filter(str_count(Date,"/")==0)%>%
+  mutate(Date=excel_numeric_to_date(as.numeric(as.character(Date)), date_system = "modern") )
+
+
+covidData=CovidData(CovidFileName)
+FullData=full_join(water_HackJob,covidData,by=c("Date","Site"))
+
+
+ui <- fluidPage(
+  titlePanel("Dashboard"),
+  
+  # Sidebar with a slider input for number of bins 
+  sidebarLayout(
+    sidebarPanel(
+      selectInput(inputId = "Site", label = ("Site"),
+                  choices = unique(FullData$Site)
+      ),
+      sliderInput("Offset", "Offset",min = -10, max = 10,step=1,value=0)
+      ),
+    mainPanel(plotOutput("plot2"))
+  )
+)
+
+
+# Define server logic required to draw a histogram
+server <- function(input, output) {
+  
+  water_shifted=reactive({
+    mutate(water_HackJob,Date=Date+input$Offset)
+    
+  })
+  FullData=reactive({
+    full_join(water_shifted(),covidData,by=c("Date","Site"))%>%
+      filter(Site==input$Site)
+  })
+  LM=reactive({
+      lm(roll ~ N1,data=FullData(),na.action = na.exclude)
+  })
+  
+  LMFData<- reactive({
+    mutate(FullData(),Fitted=fitted(LM()))
+  })
+  
+  output$plot2<-renderPlot({
+    ggplot(data=LMFData())+geom_point(aes(x=Date,y=roll))+geom_point(aes(x=Date,y=Fitted),color="red")},height = 400,width = 600)
+}
+
+
+shinyApp(ui = ui, server = server)
+```
+
+
