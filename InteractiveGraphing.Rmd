@@ -102,35 +102,74 @@ fig <-HFGDFrame%>%
     )
   )
 fig
-
+#1)Best version of modeling
+#2)Same scale-log Scale-some way to see outlines-once we see it in N1-look at N2 instead- CT variance-calibrate on one then shifts to other.
+#3)graph variance per well
+#L)N1 should not change much day to day-if it does->some issue with measurement->understand measurement to get good smooth->toss minority examples
+#group by wells->summarize->group by filter->summarize->have estimate for day.
+#or interquartile to get reasonable values->mean of those->mean W/O outlines
+#compare change over time
+#median of the replicates might be very useful
+#one picture to justify medians
+#median lines to show the rep are close-exuding outlines
+#rank testing -rank them in order-to see if they are close
+#multi-layered
+#rep from filter-same distribution-rank all 9 compare largest and smallest
+#LOOK AT PREVIOUS WORK
 ```
 
 ```{r}
+#Give them a things to look at
+#prep them to get a good understanding
+#Fix axis log scale
+#lets them pick filter
+#day to day variance
+
+#Set day to work to work on repo
+#friday?
 ui <- fluidPage(
   titlePanel("Dashboard"),
   
-  # Sidebar with a slider input for number of bins 
   sidebarLayout(
     sidebarPanel(
       selectInput(inputId = "Plant", label = ("Plant"),
-                  choices = unique(HFGDFrame$Plant)
+                  choices = unique(HFGDFrame$Plant),
+                  multiple=T 
+      ),
+      selectInput(inputId = "Line", label = ("Line Method"),
+                  choices = c("None","Loess","mean value","Linear Model")
       )
     ),
     mainPanel(plotOutput("plot2"))
   )
 )
 
-
-# Define server logic required to draw a histogram
+                                        
 server <- function(input, output) {
   filtered_data<- reactive({
-    filter(HFGDFrame, HFGDFrame$Plant==input$Plant)})
+    filter(HFGDFrame, HFGDFrame$Plant %in%  input$Plant)})
+  Filtered_mean = reactive({
+    filtered_data()%>%
+      group_by(Date,`Filter Rep`)%>%
+      summarize(N1GC=mean(N1GC))
+  })
   output$plot2<-renderPlot({
-    ggplot(data=filtered_data(),aes(x=Date,y=N1GC,color=`Filter Rep`))+geom_point()+geom_smooth(se=F)},height = 400,width = 600)
+    ggplot()+aes(x=Date,color=`Filter Rep`)+
+      geom_jitter(data=filtered_data(),aes(y=N1GC,shape=Plant,fill=`Filter Rep`),height=0,width=.05)+
+      scale_shape_manual(values=1:length(unique(HFGDFrame$Plant)))+
+      geom_line(data=Filtered_mean(),aes(y=N1GC+ifelse(input$Line=="mean value",0,NA)),size=1)+
+      geom_smooth(data=filtered_data(),aes(y=N1GC+ifelse(input$Line=="Loess",0,NA)),se=F)+
+      geom_smooth(data=filtered_data(),method='lm',aes(y=N1GC+ifelse(input$Line=="Linear Model",0,NA)),se=F)+
+      scale_y_log10(limits = c(min(HFGDFrame$N1GC),max(HFGDFrame$N1GC)))
+      },height = 600,width = 800)
 }
 
 shinyApp(ui = ui, server = server)
+
+
 ```
+
+
 ```{r}
 Waterfilename <- "../data/WW SARS-COV-2 Data V5.xlsx"
 CovidFileName = "../data/MMSD_Cases.csv"
@@ -141,7 +180,8 @@ water=WasteWater(Waterfilename)
 water_HackJob=water%>%
   filter(str_count(Date,"\\.")==0)%>%
   filter(str_count(Date,"/")==0)%>%
-  mutate(Date=excel_numeric_to_date(as.numeric(as.character(Date)), date_system = "modern") )
+  mutate(Date=excel_numeric_to_date(as.numeric(as.character(Date)), date_system = "modern") )%>%
+  filter(Site!="UW-Sellery",Site!="UW-LakeShore")
 
 
 covidData=CovidData(CovidFileName)
@@ -176,7 +216,7 @@ server <- function(input, output) {
       filter(Site==input$Site)
   })
   LM=reactive({
-      lm(roll ~ N1,data=FullData(),na.action = na.exclude)
+      lm(roll ~ log(N1)+log(PMMoV),data=FullData(),na.action = na.exclude)
   })
   
   LMFData<- reactive({
@@ -184,7 +224,11 @@ server <- function(input, output) {
   })
   
   output$plot2<-renderPlot({
-    ggplot(data=LMFData())+geom_point(aes(x=Date,y=roll))+geom_point(aes(x=Date,y=Fitted),color="red")},height = 400,width = 600)
+    ggplot(data=LMFData())+geom_point(aes(x=Date,y=roll))+
+      geom_point(aes(x=Date,y=Fitted),color="red")+
+      annotate("text", x = max(covidData$Date)-10, y = .001, label = round(summary(LM())$r.squared,3))
+    
+    },height = 400,width = 600)
 }
 
 
