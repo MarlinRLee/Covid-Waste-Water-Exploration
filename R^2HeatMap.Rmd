@@ -56,9 +56,10 @@ kprint <- function(...) {
 source("./DataProccess.R")
 
 
-Waterfilename <- "../data/WW SARS-COV-2 Data V3.xlsx"
-CovidFileName = "../data/covid.csv"
-water=WasteWater(Waterfilename)
+Waterfilename <- "../data/WW SARS-COV-2 Data V5.xlsx"
+CovidFileName = "../data/MMSD_Cases.csv"
+water=WasteWater(Waterfilename)%>%
+  filter(Site!="Madison")
 covidData=CovidData(CovidFileName)
   
 ```
@@ -91,7 +92,7 @@ for(i in 1:(MaxTimeSkip/skip)) {
   M=skip*i-skip
   Inner=inner_join(covidData,ShiftData(water,M),by = c("Date","Site"))
   if (j==1){
-    LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV), data=Inner)
+    LInner = lm(roll ~ log(N1)+log(N2), data=Inner)
   }
   if (j==2){
     LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV)+log(Total_Flow), data=Inner)
@@ -103,7 +104,7 @@ for(i in 1:(MaxTimeSkip/skip)) {
     LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)+log(Pct_BCoV), data=Inner)
   }
   if (j==5){
-    LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)+log(Pct_BCoV)+log(Total_Flow), data=Inner)
+    LInner = lm(Cases ~ log(N2)+log(N1)+log(PMMoV)+log(Pct_BCoV)+Total_Flow, data=Inner)
   }
   output[i,1]=M
   output[i,j+1]=summary(LInner)$r.squared
@@ -112,7 +113,6 @@ for(i in 1:(MaxTimeSkip/skip)) {
 outputa = data.frame(output)
 ColNames=c("Offset",Model_Names)
 colnames(outputa)=ColNames
-#output
 
 #LInner
 #How complete a picture
@@ -128,6 +128,9 @@ outputa%>%
   group_by(names)%>%
   summarize(max=max(value))
 
+LInner
+
+
 ```
 17         22
 waste ->   pop
@@ -140,9 +143,7 @@ comment out vs build into a pipe
 outputa%>%
   pivot_longer('a':'f',names_to="Models",values_to = "values")%>%
   ggplot()+
-  geom_tile(aes(x=Offset,y=Models,fill=values))+
-  scale_fill_gradient(low = "black",
-  high = "white")
+  geom_line(aes(x=Offset,y=values,color=Models))
 
 #find heatmap package:
 #heat map2

@@ -8,15 +8,6 @@ output:
 
 
 ```{r warning = FALSE, message = FALSE,echo = FALSE}
-library(tidyverse)
-library(readxl)
-library(broom)
-library(zoo)
-library(RcppRoll)
-library(ggformula)
-library(ggpubr)
-library(lubridate)
-
 
 source("./DataProccess.R")
 
@@ -52,8 +43,8 @@ for (i in 1:length(Plants)){
     filter(Plant==Plants[i])
   graph=ggplot()+
   geom_jitter(data=filtered.Filt,aes(x=Date, y=N1GC , color=`Filter Rep`),size=1,
-    position = position_jitter(width = .1, height = 0))#+
-  #geom_smooth(data=filtered.mean,aes(x=Date,y=N1GC, color=`Filter Rep`),se=F)
+    position = position_jitter(width = .1, height = 0))+
+  geom_smooth(data=filtered.mean,aes(x=Date,y=N1GC, color=`Filter Rep`),se=F)
   print(graph)
 }
 ```

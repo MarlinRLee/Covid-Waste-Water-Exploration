@@ -48,11 +48,9 @@ kprint <- function(...) {
 ```
 
 ```{r}
-
 source("./DataProccess.R")
 
-
-Waterfilename <- "../data/WW SARS-COV-2 Data V3.xlsx"
+Waterfilename <- "../data/WW SARS-COV-2 Data V5.xlsx"
 CovidFileName = "../data/covid.csv"
 water=WasteWater(Waterfilename)
 ```
@@ -73,6 +71,7 @@ N2Missing=length(N2Missing$N2)
 paste("Out of the",DataPoints,"Data points in the data base,",N2Missing,"N2 points are missing. This means the dataframe is missing",round(100*N2Missing/DataPoints),"Percent of the N2 data")
 ```
 
+
 ```{r, echo=FALSE, dpi=600, fig.width=12, fig.height=12}
 water%>%
   ggplot()+aes(x=N1,N2)+
@@ -85,17 +84,23 @@ water%>%
 
 ```{r, echo=FALSE, dpi=600, fig.width=8, fig.height=8}
 ####Fills in missing n2 values
-N1Mod = lm(N1~N2, data=water)
+N1Mod = lm(N2~N1, data=water)
 water$temp=predict.lm(N1Mod,water,interval="none")
 water2=water%>%
   mutate(N2=ifelse(is.na(N2),temp,N2))
-water2=water2%>%
-  select(-temp)
 ###
 summary(N1Mod)
 ```
 
 ```{r, echo=FALSE, dpi=600, fig.width=8, fig.height=8}
+water2%>%
+  ggplot()+aes(x=temp,y=(N2))+
+  geom_point()+
+  stat_smooth(method = "lm", col = "red")+
+  ylab("Residual")
+
+
+
 water2%>%
   ggplot()+aes(x=Date,y=(N2-temp))+
   geom_point()+

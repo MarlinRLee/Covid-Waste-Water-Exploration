@@ -47,10 +47,14 @@ kprint <- function(...) {
 source("./DataProccess.R")
 
 
-Waterfilename <- "../data/WW SARS-COV-2 Data V3.xlsx"
+Waterfilename <- "../data/WW SARS-COV-2 Data V5.xlsx"
 CovidFileName = "../data/MMSD_Cases.csv"
-water=WasteWater(Waterfilename)
+water=WasteWater(b)
 covidData=CovidData(CovidFileName)
+
+a="../data/WATERMICRO_WW_COVID-2021-03-17.xlsx"
+b="../data/WW SARS-COV-2 Data V5.xlsx"
+
 
 
 ```

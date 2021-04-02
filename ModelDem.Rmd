@@ -42,16 +42,23 @@ kprint <- function(...) {
 }
 ```
 
-```{r}
+```{r, echo=FALSE, dpi=600, fig.width=8, fig.height=8}
 
 source("./DataProccess.R")
 
 
 Waterfilename <- "../data/WW SARS-COV-2 Data V3.xlsx"
-CovidFileName = "../data/covid.csv"
+CovidFileName = "../data/MMSD_Cases.csv"
 water=WasteWater(Waterfilename)
 covidData=CovidData(CovidFileName)
   
+
+covidData%>%
+  ggplot()+aes(x=Date,y=Cases)+geom_point()+facet_wrap(~Site)
+
+water%>%
+  ggplot()+aes(x=Date,y=N1)+geom_point()+facet_wrap(~Site)
+
 ```
 
 
@@ -149,7 +156,12 @@ ylab("% of Covid Tests Positive")+
 
 
 ggplot(data=AdjustedData)+aes(x=Date)+
-geom_smooth(aes(y=Cases))+
+geom_point(aes(y=Cases))+
+ylab("% of Covid Tests Positive")+
+  facet_wrap(~Site)
+
+ggplot(data=AdjustedData)+aes(x=Date)+
+geom_point(aes(y=fitted))+
 ylab("% of Covid Tests Positive")+
   facet_wrap(~Site)
 ```

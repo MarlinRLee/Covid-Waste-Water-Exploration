@@ -42,16 +42,17 @@ kprint <- function(...) {
 }
 ```
 
+
 ```{r}
 
 source("./DataProccess.R")
 
 
-Waterfilename <- "../data/WW SARS-COV-2 Data V3.xlsx"
-CovidFileName = "../data/covid.csv"
+Waterfilename <- "../data/WW SARS-COV-2 Data V5.xlsx"
+CovidFileName = "../data/MMSD_Cases.csv"
 water=WasteWater(Waterfilename)
-covidData=CovidData(CovidFileName)
-  
+MMSD_Cases=CovidData(CovidFileName)
+
 ```
 
 #Conductivity, TSS, pH, Total_Flow, N1, N2, AVG, PMMoV, Pct_BCoV, TSS (mg/L)
@@ -87,15 +88,35 @@ water2=water%>%
   mutate(Date=as.Date(Date))%>%
   mutate(Date=Date+ShiftedAmount)
 
-MergedData=left_join(covidData,water2,by = c("Date","Site"))%>%
+MergedData=left_join(MMSD_Cases,water2,by = c("Date","Site"))%>%
   filter(Site!="UW-LakeShore",Site!="UW-Sellery", Site!="Madison")
 
 sites=unique(MergedData$Site)
 
 
+
+StartTesting=MMSD_Cases%>%
+  ungroup()%>%
+  summarize(min(Date,na.rm = TRUE))+ShiftedAmount
+StartTesting=StartTesting[[1]]+ShiftedAmount
+
+EndTesting=MMSD_Cases%>%
+  ungroup()%>%
+  summarize(max(Date,na.rm = TRUE))+ShiftedAmount
+EndTesting=EndTesting[[1]]+ShiftedAmount
+
+StartFeces=water%>%
+  summarize(min(Date,na.rm = TRUE))+ShiftedAmount
+StartFeces=StartFeces[[1]]+ShiftedAmount
+
+EndFeces=water%>%
+  summarize(max(Date,na.rm = TRUE))
+EndFeces=EndFeces[[1]]+ShiftedAmount
+
+
 myplots <- list()
 for (i in 1:length(sites)){
-  Inner=inner_join(covidData,water2,by = c("Date","Site"))%>%
+  Inner=inner_join(MMSD_Cases,water2,by = c("Date","Site"))%>%
     filter(Site==sites[i])
   LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV), data=Inner)
 
@@ -104,10 +125,6 @@ for (i in 1:length(sites)){
   AdjustedData=MergedData
   R2=round(summary(LInner)$r.squared,2)
   #gives the ranges of data for graph movements
-  StartTesting=as.Date("2020-4-11")
-  EndTesting=as.Date("2021-1-4")
-  StartFeces=as.Date("2020-9-20")+ShiftedAmount
-  EndFeces=as.Date("2020-11-25")+ShiftedAmount
 
   minTest=min(AdjustedData$roll,na.rm=T)
   maxTest=max(AdjustedData$roll,na.rm=T)
@@ -130,7 +147,6 @@ for (i in 1:length(sites)){
 }
 
 ggarrange(plotlist = myplots,ncol = 2, nrow = 3)
-
 ```
 
 Points
@@ -139,7 +155,7 @@ Points
 
 myplots <- list()
 for (i in 1:length(sites)){
-  Inner=inner_join(covidData,water2,by = c("Date","Site"))%>%
+  Inner=inner_join(MMSD_Cases,water2,by = c("Date","Site"))%>%
     filter(Site==sites[i])
   LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV), data=Inner)
 
@@ -148,10 +164,6 @@ for (i in 1:length(sites)){
   AdjustedData=MergedData
   R2=round(summary(LInner)$r.squared,2)
   #gives the ranges of data for graph movements
-  StartTesting=as.Date("2020-4-11")
-  EndTesting=as.Date("2021-1-4")
-  StartFeces=as.Date("2020-9-20")+ShiftedAmount
-  EndFeces=as.Date("2020-11-25")+ShiftedAmount
 
   minTest=min(AdjustedData$roll,na.rm=T)
   maxTest=max(AdjustedData$roll,na.rm=T)
@@ -167,10 +179,79 @@ for (i in 1:length(sites)){
     annotate(geom="label", x=StartFeces+ShiftedAmount, y=.025, label=paste("R^2:",R2), color="red")+
     ylab("% of Covid Tests Positive")+
     ylim(minTest,maxTest)+
-    scale_x_date(limits = c(StartFeces,EndFeces),labels = date_format("%b"))+
+    scale_x_date(limits = c(StartFeces,EndTesting),labels = date_format("%b"))+
     ggtitle(sites[i])
 
 }
 
 ggarrange(plotlist = myplots,ncol = 2, nrow = 3)
+
+
+
+
+
+```
+
+
+```{r, echo=FALSE, dpi=600, fig.width=6, fig.height=6}
+
+
+Inner=inner_join(MMSD_Cases,water2,by = c("Date","Site"))
+
+Inner%>%
+  ggplot()+aes(x=N1/(PMMoV*Pct_BCoV),y=Cases/Tests,color=Site)+geom_smooth(size=3)+
+  scale_x_log10()+
+  scale_y_log10()
+
+Inner%>%
+  filter(Site=="Madison")%>%
+  ggplot()+aes(x=N1,y=Cases/Tests,color=Site)+geom_smooth(size=3)+
+  scale_x_log10()+
+  scale_y_log10()
+
+```
+
+```{r, echo=FALSE, dpi=600, fig.width=6, fig.height=6}
+library(ggplot2)
+library(shiny)
+
+MergedData=left_join(MMSD_Cases,water2,by = c("Date","Site"))%>%
+  filter(Site!="UW-LakeShore",Site!="UW-Sellery")
+sites=unique(MergedData$Site)
+for (i in 1:length(sites)){
+  Inner=inner_join(MMSD_Cases,water2,by = c("Date","Site"))%>%
+    filter(Site==sites[i])
+  LInner = lm(roll ~ log(N2)+log(N1)+log(PMMoV), data=Inner)
+
+  MergedData$fitted=predict.lm(LInner,MergedData,interval="none")
+}
+
+
+
+
+ui <- fluidPage(
+ strong("This is an interactive line"),
+ #sliderInput("slope", "Define slope:", min = -5, max = 5, value = 0, step = 0.01),
+ sliderInput("intercept", "Define intercept:", min = -30, max = 30, value = 0, step = 1),
+ selectInput("Sites","Variable",unique(MergedData$Site)),
+ plotOutput("linePlot"))
+
+server <- function(input, output) {
+output$linePlot <- renderPlot({
+    ggplot(data=MergedData)+aes(alpha = Site %in% input$Sites)+
+    geom_point(aes(y=roll,x=Date,colour="Percent Positive"))+
+    geom_point(aes(y=fitted,x=Date+input$intercept,colour="Model"),se=F)+
+    scale_alpha_discrete(range = c(0, 1))+
+    ylab("% of Covid Tests Positive")+
+    ylim(minTest,maxTest)+
+    scale_x_date(limits = c(StartFeces,EndTesting),labels = date_format("%b"))
+  })
+}
+
+
+
+shinyApp(ui, server)
+
+
+c(unique(MergedData$Site),c())
 ```
