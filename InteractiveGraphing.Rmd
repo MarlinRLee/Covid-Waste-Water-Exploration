@@ -44,7 +44,7 @@ ggplotly(p,tooltip = c("text", "size"))
 
 
 ```{r}
-Jitter_POSIXlt = function (x, factor = 1, amount = 86400/4) 
+Jitter_POSIXltM = function (x, factor = 1, amount = 86400/4) 
 {
     if (length(x) == 0L) 
         return(x)
@@ -74,7 +74,7 @@ for (i in 2:length(Plants)){
 }
 fig <-HFGDFrame%>%
   plot_ly(
-  x = Jitter_POSIXlt(as.POSIXlt(HFGDFrame$Date)),
+  x = Jitter_POSIXltM(as.POSIXlt(HFGDFrame$Date)),
   text = ~`Plant`,
   hoverinfo = 'text',
   transforms = list(
@@ -134,10 +134,16 @@ ui <- fluidPage(
     sidebarPanel(
       selectInput(inputId = "Plant", label = ("Plant"),
                   choices = unique(HFGDFrame$Plant),
-                  multiple=T 
+                  multiple=T,
+                  selected="Madison"
       ),
       selectInput(inputId = "Line", label = ("Line Method"),
-                  choices = c("None","Loess","mean value","Linear Model")
+                  choices = c("None","Loess","mean value","Linear Model"),
+                  selected="None"
+      ),
+      selectInput(inputId = "scale", label = ("y scale"),
+                  choices = c("None","log y scale"),
+                  selected="log y scale"
       )
     ),
     mainPanel(plotOutput("plot2"))
@@ -154,13 +160,17 @@ server <- function(input, output) {
       summarize(N1GC=mean(N1GC))
   })
   output$plot2<-renderPlot({
-    ggplot()+aes(x=Date,color=`Filter Rep`)+
-      geom_jitter(data=filtered_data(),aes(y=N1GC,shape=Plant,fill=`Filter Rep`),height=0,width=.05)+
-      scale_shape_manual(values=1:length(unique(HFGDFrame$Plant)))+
-      geom_line(data=Filtered_mean(),aes(y=N1GC+ifelse(input$Line=="mean value",0,NA)),size=1)+
-      geom_smooth(data=filtered_data(),aes(y=N1GC+ifelse(input$Line=="Loess",0,NA)),se=F)+
-      geom_smooth(data=filtered_data(),method='lm',aes(y=N1GC+ifelse(input$Line=="Linear Model",0,NA)),se=F)+
-      scale_y_log10(limits = c(min(HFGDFrame$N1GC),max(HFGDFrame$N1GC)))
+      HFGDPlot=ggplot()+aes(x=Date,color=`Filter Rep`)+
+        geom_jitter(data=filtered_data(),aes(y=N1GC,shape=Plant,fill=`Filter Rep`),height=0,width=.05)+
+        scale_shape_manual(values=1:length(unique(HFGDFrame$Plant)))+
+        geom_line(data=Filtered_mean(),aes(y=N1GC+ifelse(input$Line=="mean value",0,NA)),size=1)+
+        geom_smooth(data=filtered_data(),aes(y=N1GC+ifelse(input$Line=="Loess",0,NA)),se=F)+
+        geom_smooth(data=filtered_data(),method='lm',aes(y=N1GC+ifelse(input$Line=="Linear Model",0,NA)),se=F)+
+        scale_y_continuous(limits = c(min(HFGDFrame$N1GC),max(HFGDFrame$N1GC)))
+      if(input$scale=="log y scale")
+        HFGDPlot = HFGDPlot + scale_y_log10(limits = c(min(HFGDFrame$N1GC),max(HFGDFrame$N1GC)))
+        
+    return(HFGDPlot)
       },height = 600,width = 800)
 }
 
@@ -178,9 +188,6 @@ library(janitor)
 water=WasteWater(Waterfilename)
 
 water_HackJob=water%>%
-  filter(str_count(Date,"\\.")==0)%>%
-  filter(str_count(Date,"/")==0)%>%
-  mutate(Date=excel_numeric_to_date(as.numeric(as.character(Date)), date_system = "modern") )%>%
   filter(Site!="UW-Sellery",Site!="UW-LakeShore")
 
 
@@ -216,7 +223,7 @@ server <- function(input, output) {
       filter(Site==input$Site)
   })
   LM=reactive({
-      lm(roll ~ log(N1)+log(PMMoV),data=FullData(),na.action = na.exclude)
+      lm(roll ~ log(N1)+log(PMMoV)+log(Pct_BCoV),data=FullData(),na.action = na.exclude)
   })
   
   LMFData<- reactive({

@@ -21,8 +21,9 @@ source("./DataProccess.R")
 HFGData="../data/HFG data for stats preliminary 3-18-21.xlsx"
 
 HFGFrame=HFGInfo(HFGData)%>%
-  mutate("Filter Rep"=as.character(`Filter Rep`),`Well Rep`=as.character(`Well Rep`))%>%
-  filter(!is.na(N1Ct))
+  mutate(Filter=as.character(Filter),Well=as.character(Well))%>%
+  filter(!is.na(N1Ct))%>%
+  mutate(DayPlace=paste(Plant,Date))
 ```
 
 ```{r warning = FALSE,echo = FALSE}
@@ -56,10 +57,10 @@ for (i in 1:length(Plants)){
     DateLevelAna[a]=DifSq(DatesLevel$N1GC)
     DateLevelAnaCt[a]=DifSq(DatesLevel$N1Ct)
     
-    Filters =unique(DatesLevel$`Filter Rep`)
+    Filters =unique(DatesLevel$Filter)
     for (k in 1:length(Filters)){
       FiltersLevel=DatesLevel%>%
-        filter(`Filter Rep`==Filters[k])
+        filter(Filter==Filters[k])
       b=b+1
       FilterLevelAna[b]=DifSq(FiltersLevel$N1GC)
       FilterLevelAnaCt[b]=DifSq(FiltersLevel$N1Ct)
@@ -105,4 +106,31 @@ row.names(DF) <- c("Normal Varience","Var by plant","var by date","var by filter
 
 DF%>%
   mutate(GCAjusted=GC/meanGC^2,CtAjusted=Ct/meanCt^2)
+
+#Z-score-
+#log(var)-change var 
+#More details on template
 ```
+
+```{r}
+withinRunStats = function(x) c(sum = sum(x), mean = mean(x), var = var(x), n = length(x))
+tapply(HFGFrame$N1GC, HFGFrame$Filter, withinRunStats)
+fit = lm(N1GC ~ DayPlace, HFGFrame)
+anova(fit)
+anova(fit)["Residuals", "Mean Sq"]
+anova(fit)["DayPlace", "Mean Sq"]
+degreesOfFreedom = anova(fit)[, "Df"]
+names(degreesOfFreedom) = c("treatment", "error")
+
+
+#I'm not necessarily suggesting that we apply that particular F-test, although we can.   What I'd like to see is an xy plot with one dot for each set of 9 N1 measurements with x = "Between group variability" and y = "within group variability".   Calculate the variances on the log transformed values.    The null hypothesis of the F-test says the points would fall close to the line y=x: the two variances are equal.
+unique(HFGFrame$Filter)
+#var(log(N1GC))
+HFGFrame%>%
+  group_by(Plant,Date)%>%
+  summarise(between=var(log(N1GC)),within=summary(aov(log(N1GC) ~ Filter))[1][[1]][[2]][1])%>%
+  ggplot()+geom_point(aes(x=between,y=within))+
+  scale_y_log10()+
+  scale_x_log10()
+```
+
